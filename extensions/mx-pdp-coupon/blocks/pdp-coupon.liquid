@@ -1,0 +1,268 @@
+{% comment %}
+  Coupons are managed in the PromoMint admin app, which creates a REAL Shopify
+  discount for each one and mirrors them to the shop metafield
+  custom.promomint_coupons (type json). This block renders ONLY those real,
+  app-managed coupons — there is no theme-editor code entry and no demo
+  fallback, so every code shown here actually reduces the price at checkout.
+  coupon_limit (3 free / 6 premium) caps how many are shown. If the store has
+  no app coupons yet, the block renders nothing.
+{% endcomment %}
+{% assign plan = shop.metafields.custom["mx-pdp-coupon"].value %}
+
+{% assign is_premium = false %}
+{% if plan == 'premium' %}
+  {% assign is_premium = true %}
+{% endif %}
+
+{% assign coupon_limit = 3 %}
+{% if is_premium %}
+  {% assign coupon_limit = 6 %}
+{% endif %}
+
+{% assign app_coupons = shop.metafields.custom.promomint_coupons.value %}
+
+{% if app_coupons and app_coupons.size > 0 %}
+
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/swiper@9/swiper-bundle.min.css">
+<script id="mxt-swiper-lib" src="https://cdn.jsdelivr.net/npm/swiper@9/swiper-bundle.min.js" defer></script>
+
+<style>
+.mxt-coupon-container{
+  width:100%;
+  margin-top:10px;
+  background: {{ block.settings.wrapper_bg }};
+  padding:12px;
+  border-radius:10px;
+  position:relative;
+}
+
+.mxt-heading{
+  font-size:20px;
+  font-weight:600;
+  margin-bottom:10px;
+  color: {{ block.settings.heading_color }};
+}
+
+.mxt-coupon-item{
+  background: {{ block.settings.card_bg }};
+  border-radius:12px;
+  display:flex;
+  box-shadow:0 4px 12px rgba(0,0,0,0.08);
+}
+
+.mxt-coupon-stub{
+  width:26px;
+  background: {{ block.settings.stub_bg }};
+  position:relative;
+}
+
+.mxt-coupon-stub:before{
+  content:"";
+  position:absolute;
+  inset:0;
+  background:
+  radial-gradient(circle at 0 25%, {{ block.settings.card_bg }} 8px, transparent 9px),
+  radial-gradient(circle at 0 50%, {{ block.settings.card_bg }} 8px, transparent 9px),
+  radial-gradient(circle at 0 75%, {{ block.settings.card_bg }} 8px, transparent 9px);
+}
+
+.mxt-coupon-body{
+  padding:12px;
+  width:100%;
+}
+
+.mxt-coupon-title{
+  font-weight:600;
+  font-size:14px;
+  color: {{ block.settings.title_color }};
+}
+
+.mxt-coupon-code{
+  color: {{ block.settings.code_color }};
+  font-size:13px;
+  margin-top:4px;
+}
+
+.mxt-coupon-copy{
+  display:flex;
+  justify-content:space-between;
+  align-items:center;
+  border-top:1px dashed #ddd;
+  padding-top:6px;
+  margin-top:6px;
+  cursor:pointer;
+  color: {{ block.settings.copy_color }};
+}
+
+.mxt-copy-icon{
+  width:22px;
+  height:22px;
+}
+
+/* Arrows */
+.mxt-swiper-nav{
+  position:absolute;
+  top: {% if block.settings.heading_text != blank %}60%{% else %}50%{% endif %};
+  transform:translateY(-50%);
+  z-index:10;
+}
+
+.mxt-prev{ left:-1px; }
+.mxt-next{ right:-1px; }
+
+.mxt-swiper-nav button{
+  width:34px;
+  height:34px;
+  border:none;
+  background: {{ block.settings.arrow_bg }};
+  color: {{ block.settings.arrow_color }};
+  border-radius:6px;
+  cursor:pointer;
+}
+</style>
+
+<div class="mxt-coupon-container">
+
+  {% if block.settings.heading_text != blank %}
+    <div class="mxt-heading">{{ block.settings.heading_text }}</div>
+  {% endif %}
+
+  {% if block.settings.show_arrows %}
+    <div class="mxt-swiper-nav mxt-prev"><button>&lt;</button></div>
+    <div class="mxt-swiper-nav mxt-next"><button>&gt;</button></div>
+  {% endif %}
+
+  <div class="swiper mxt-swiper">
+    <div class="swiper-wrapper">
+
+      {% for coupon in app_coupons limit: coupon_limit %}
+
+        <div class="swiper-slide" style="width:260px;">
+          <div class="mxt-coupon-item">
+            <div class="mxt-coupon-stub"></div>
+
+            <div class="mxt-coupon-body">
+              <div class="mxt-coupon-title">{{ coupon.title }}</div>
+              <div class="mxt-coupon-code">Code: <b>{{ coupon.code }}</b></div>
+
+              <div class="mxt-coupon-copy" data-copy="{{ coupon.code }}">
+                <span class="mxt-copy-label">copy code</span>
+
+                <svg class="mxt-copy-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <rect x="9" y="9" width="11" height="11" rx="2"/>
+                  <rect x="4" y="4" width="11" height="11" rx="2"/>
+                </svg>
+              </div>
+            </div>
+          </div>
+        </div>
+
+      {% endfor %}
+
+    </div>
+  </div>
+</div>
+
+<script>
+(function(){
+  // The Swiper bundle above is `defer`red, so it has NOT executed yet while
+  // this inline script runs -- calling `new Swiper` here directly threw
+  // "Swiper is not defined" and left the strip uninitialised (with
+  // .swiper{overflow:hidden} that silently hid every coupon past the first
+  // viewport width and killed the arrows). Init is therefore deferred until
+  // the bundle is actually available, and made idempotent so the extra
+  // triggers -- and a second copy of this block on the same page -- cannot
+  // double-initialise a slider.
+  function initSwipers(){
+    if (typeof Swiper === "undefined") return;
+
+    document.querySelectorAll(".mxt-swiper").forEach(function(el){
+      if (el.dataset.mxtInit) return;
+
+      var container = el.closest(".mxt-coupon-container");
+      if (!container) return;
+
+      el.dataset.mxtInit = "1";
+
+      new Swiper(el, {
+        slidesPerView: "auto",
+        spaceBetween: 12,
+        navigation: {
+          nextEl: container.querySelector(".mxt-next"),
+          prevEl: container.querySelector(".mxt-prev")
+        }
+      });
+    });
+  }
+
+  if (typeof Swiper !== "undefined") {
+    initSwipers();
+  } else {
+    // Covers the normal parse (DOMContentLoaded fires after deferred scripts),
+    // a cached/late bundle, and the block being re-rendered by the theme
+    // editor after load.
+    var lib = document.getElementById("mxt-swiper-lib");
+    if (lib) lib.addEventListener("load", initSwipers);
+    document.addEventListener("DOMContentLoaded", initSwipers);
+    window.addEventListener("load", initSwipers);
+  }
+
+  // Bound once per page, not once per block instance.
+  if (!window.mxtCouponCopyBound) {
+    window.mxtCouponCopyBound = true;
+
+    document.addEventListener("click", function(e){
+      var el = e.target.closest(".mxt-coupon-copy");
+      if(!el) return;
+
+      var code = el.getAttribute("data-copy");
+      var label = el.querySelector(".mxt-copy-label");
+      if(!code || !label) return;
+
+      Promise.resolve(
+        navigator.clipboard && navigator.clipboard.writeText(code)
+      ).then(function(){
+        label.innerText = "Copied";
+        setTimeout(function(){
+          label.innerText = "copy code";
+        },1500);
+      }).catch(function(){
+        /* Clipboard blocked (insecure context or denied permission). */
+      });
+    });
+  }
+})();
+</script>
+
+{% endif %}
+
+{% schema %}
+{
+  "name": "PromoMint Coupon Offers",
+  "target": "section",
+  "enabled_on": { "templates": ["product"] },
+  "settings": [
+
+    { "type": "text", "id": "heading_text", "label": "Heading text", "default": "Available Offers" },
+    { "type": "color", "id": "heading_color", "label": "Heading color", "default": "#000000" },
+
+    { "type": "color", "id": "wrapper_bg", "label": "Wrapper background", "default": "#f5f5f5" },
+
+    { "type": "color", "id": "card_bg", "label": "Card background", "default": "#ffffff" },
+    { "type": "color", "id": "stub_bg", "label": "Stub color", "default": "#6b2147" },
+
+    { "type": "color", "id": "title_color", "label": "Title color", "default": "#000000" },
+    { "type": "color", "id": "code_color", "label": "Code color", "default": "#0a8f2f" },
+    { "type": "color", "id": "copy_color", "label": "Copy text color", "default": "#000000" },
+
+    { "type": "color", "id": "arrow_bg", "label": "Arrow background", "default": "#000000" },
+
+    { "type": "color", "id": "arrow_color", "label": "Arrow icon color", "default": "#ffffff" },
+
+    { "type": "checkbox", "id": "show_arrows", "label": "Show arrows", "default": true },
+
+    { "type": "header", "content": "Coupons" },
+    { "type": "paragraph", "content": "Coupons are managed in the PromoMint app (Coupons page). Each one creates a real Shopify discount that works at checkout and appears here automatically — Free plan shows up to 3, Premium up to 6." }
+  ]
+}
+{% endschema %}

@@ -1,0 +1,32 @@
+# Learn more about configuring your app at https://shopify.dev/docs/apps/tools/cli/configuration
+
+client_id = "0389ad7b1333114bcd48c781c6089a86"
+name = "PromoMint"
+application_url = "https://c83t46y950m5qfhejdqsjqnm.91.239.208.85.sslip.io"
+embedded = true
+
+[build]
+automatically_update_urls_on_dev = true
+include_config_on_deploy = true
+
+[webhooks]
+api_version = "2026-07"
+
+  [[webhooks.subscriptions]]
+  compliance_topics = [ "customers/data_request", "customers/redact", "shop/redact" ]
+  uri = "/api/webhooks"
+
+  [[webhooks.subscriptions]]
+  topics = [ "app/uninstalled" ]
+  uri = "/api/webhooks"
+
+[access_scopes]
+# Learn more at https://shopify.dev/docs/apps/tools/cli/configuration#access_scopes
+scopes = "write_products,read_products,write_discounts"
+
+[auth]
+redirect_urls = [
+  "https://c83t46y950m5qfhejdqsjqnm.91.239.208.85.sslip.io/auth/callback",
+  "https://c83t46y950m5qfhejdqsjqnm.91.239.208.85.sslip.io/auth/shopify/callback",
+  "https://c83t46y950m5qfhejdqsjqnm.91.239.208.85.sslip.io/api/auth/callback"
+]
