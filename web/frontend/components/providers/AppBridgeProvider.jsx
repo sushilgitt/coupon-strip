@@ -58,7 +58,7 @@ const isRootPath = (path) => {
   }
 
   try {
-    const normalized = new URL(path, "https://promomint.local");
+    const normalized = new URL(path, "https://coupon-strip.local");
     return normalized.pathname === "/";
   } catch {
     return false;
@@ -82,7 +82,7 @@ const getNavigationTargetPathname = (path) => {
   }
 
   try {
-    return new URL(path, "https://promomint.local").pathname;
+    return new URL(path, "https://coupon-strip.local").pathname;
   } catch {
     return "";
   }

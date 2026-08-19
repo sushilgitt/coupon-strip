@@ -10,7 +10,7 @@ import {
   PolarisProvider,
 } from "./components";
 
-const RETURN_TO_STORAGE_KEY = "promomint:returnTo";
+const RETURN_TO_STORAGE_KEY = "couponStrip:returnTo";
 
 const decodeHost = (host) => {
   if (!host) return "";

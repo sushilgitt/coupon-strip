@@ -1,4 +1,4 @@
-# PromoLoom Deployment Checklist
+# Coupon Strip Deployment Checklist
 
 ## 1. VPS / Coolify environment variables
 
@@ -12,7 +12,7 @@ HOST=https://your-app-domain.com
 PORT=3000
 BACKEND_PORT=3000
 MONGODB_URI=mongodb://username:password@your-mongodb-host:27017/admin?authSource=admin&directConnection=true
-MONGODB_DB_NAME=promoloom
+MONGODB_DB_NAME=couponstrip
 MONGODB_SESSION_COLLECTION=shopify_sessions
 VITE_SHOPIFY_API_KEY=your_shopify_api_key
 VITE_SHOPIFY_EXTENSION_UID=your_shopify_extension_uid
@@ -20,7 +20,7 @@ VITE_SHOPIFY_BLOCK_HANDLE=pdp-coupon
 SHOPIFY_BILLING_TEST_MODE=true
 ```
 
-Use a lowercase MongoDB database name such as `promoloom`. MongoDB can fail when a host already has the same database name in a different case.
+Use a lowercase MongoDB database name such as `couponstrip`. MongoDB can fail when a host already has the same database name in a different case.
 
 Use the same `SHOPIFY_API_KEY`, `VITE_SHOPIFY_API_KEY`, `VITE_SHOPIFY_EXTENSION_UID`, and `VITE_SHOPIFY_BLOCK_HANDLE` as Docker **build args** (not just runtime env) if your platform separates build-time and runtime env vars. Vite bakes `VITE_SHOPIFY_API_KEY` into `frontend/dist/index.html` at build time so the App Bridge CDN script can read it from `<meta name="shopify-api-key">`; if it isn't set at build, the embedded-app auto-check on the Shopify partner dashboard will fail.
 

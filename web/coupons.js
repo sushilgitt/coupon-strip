@@ -6,12 +6,12 @@ import shopify from "./shopify.js";
 // theme block reads directly. The metafield is the single source of truth for
 // what the block renders; the Shopify discount is the enforcement at checkout.
 //
-// Storage: shop metafield custom/promomint_coupons (type json), an array of
+// Storage: shop metafield custom/coupon_strip_coupons (type json), an array of
 //   { id, code, title, type, value, minSubtotal, discountGid, status }
 // where type is "percentage" | "fixed" | "free_shipping".
 
 export const COUPONS_NAMESPACE = "custom";
-export const COUPONS_KEY = "promomint_coupons";
+export const COUPONS_KEY = "coupon_strip_coupons";
 
 export const COUPON_TYPES = ["percentage", "fixed", "free_shipping"];
 

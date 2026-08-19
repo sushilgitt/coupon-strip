@@ -6,7 +6,7 @@ import {
   Page,
   TextContainer,
 } from "@shopify/polaris";
-import { promoMintColors, promoMintStyles } from "../brand";
+import { couponStripColors, couponStripStyles } from "../brand";
 
 const decodeHost = (host) => {
   if (!host) return "";
@@ -58,18 +58,18 @@ export default function HomePage() {
   const location = useLocation();
 
   return (
-    <Page title="PromoMint">
+    <Page title="Coupon Strip">
       <Layout>
         <Layout.Section>
-          <Card sectioned style={promoMintStyles.heroCard}>
+          <Card sectioned style={couponStripStyles.heroCard}>
             <TextContainer spacing="loose">
-              <h2 style={{ color: promoMintColors.text }}>Display coupon offers where shoppers need them</h2>
-              <p style={{ color: promoMintColors.mutedText }}>
-                PromoMint lets you place coupon offers directly on product pages
+              <h2 style={{ color: couponStripColors.text }}>Display coupon offers where shoppers need them</h2>
+              <p style={{ color: couponStripColors.mutedText }}>
+                Coupon Strip lets you place coupon offers directly on product pages
                 so customers can spot available savings and copy codes quickly.
               </p>
-              <p style={{ color: promoMintColors.mutedText }}>
-                To get started, add the PromoMint Coupon Offers app block to your
+              <p style={{ color: couponStripColors.mutedText }}>
+                To get started, add the Coupon Strip Offers app block to your
                 product template in the theme editor, then create your coupons on
                 the Coupons page. Each coupon becomes a real Shopify discount, so
                 the code actually reduces the price at checkout.
@@ -79,15 +79,15 @@ export default function HomePage() {
         </Layout.Section>
 
         <Layout.Section oneHalf>
-          <Card sectioned title="Getting started" style={promoMintStyles.accentCard}>
+          <Card sectioned title="Getting started" style={couponStripStyles.accentCard}>
             <TextContainer spacing="loose">
-              <p style={{ color: promoMintColors.mutedText }}>
-                Place the PromoMint Coupon Offers app block on your product
+              <p style={{ color: couponStripColors.mutedText }}>
+                Place the Coupon Strip Offers app block on your product
                 template in the theme editor, then create the discount codes you
                 want to show on the Coupons page.
               </p>
               <Button
-                style={promoMintStyles.primaryButton}
+                style={couponStripStyles.primaryButton}
                 onClick={() =>
                   navigate(withEmbeddedParams("/coupons", location.search))
                 }
@@ -99,14 +99,14 @@ export default function HomePage() {
         </Layout.Section>
 
         <Layout.Section oneHalf>
-          <Card sectioned title="Plans" style={promoMintStyles.accentCard}>
+          <Card sectioned title="Plans" style={couponStripStyles.accentCard}>
             <TextContainer spacing="loose">
-              <p style={{ color: promoMintColors.mutedText }}>
+              <p style={{ color: couponStripColors.mutedText }}>
                 Compare the available plan options and choose the one that fits
                 your store.
               </p>
               <Button
-                style={promoMintStyles.primaryButton}
+                style={couponStripStyles.primaryButton}
                 onClick={() =>
                   navigate(withEmbeddedParams("/pricing", location.search))
                 }

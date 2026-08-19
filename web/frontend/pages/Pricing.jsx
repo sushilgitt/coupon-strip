@@ -11,7 +11,7 @@ import {
   TextContainer,
   Icon,
 } from "@shopify/polaris";
-import { promoMintColors, promoMintStyles } from "../brand";
+import { couponStripColors, couponStripStyles } from "../brand";
 import { CircleTickMinor } from "@shopify/polaris-icons";
 import { Redirect } from "@shopify/app-bridge/actions";
 import { useAppBridge } from "@shopify/app-bridge-react";
@@ -21,8 +21,8 @@ import {
   hasRecentReauthAttempt,
 } from "../hooks";
 
-const PENDING_PLAN_STORAGE_KEY = "promomint:pendingPlan";
-const RETURN_TO_STORAGE_KEY = "promomint:returnTo";
+const PENDING_PLAN_STORAGE_KEY = "couponStrip:pendingPlan";
+const RETURN_TO_STORAGE_KEY = "couponStrip:returnTo";
 const REQUEST_TIMEOUT_MS = 15000;
 const REAUTH_RECOVERY_RETRY_MS = 16000;
 
@@ -466,28 +466,28 @@ export default function Pricing() {
   const Feature = ({ children }) => (
     <Stack spacing="tight" alignment="center">
       {tick}
-      <span style={{ fontSize: 14, color: promoMintColors.text }}>{children}</span>
+      <span style={{ fontSize: 14, color: couponStripColors.text }}>{children}</span>
     </Stack>
   );
 
   const cardStyle = (plan) => ({
     borderRadius: 20,
     border: isCurrent(plan)
-      ? `2px solid ${promoMintColors.borderStrong}`
-      : `1px solid ${promoMintColors.border}`,
+      ? `2px solid ${couponStripColors.borderStrong}`
+      : `1px solid ${couponStripColors.border}`,
     boxShadow: isCurrent(plan)
-      ? `0 18px 45px ${promoMintColors.shadowStrong}`
-      : `0 8px 24px ${promoMintColors.shadow}`,
+      ? `0 18px 45px ${couponStripColors.shadowStrong}`
+      : `0 8px 24px ${couponStripColors.shadow}`,
     background:
       plan === "premium"
-        ? `linear-gradient(180deg, #ffffff 0%, ${promoMintColors.indigoSoft} 100%)`
-        : `linear-gradient(180deg, #ffffff 0%, ${promoMintColors.mintSoft} 100%)`,
+        ? `linear-gradient(180deg, #ffffff 0%, ${couponStripColors.indigoSoft} 100%)`
+        : `linear-gradient(180deg, #ffffff 0%, ${couponStripColors.mintSoft} 100%)`,
     transform: isCurrent(plan) ? "translateY(-4px)" : "none",
     transition: "all 0.2s ease",
   });
 
   const currentBadge = {
-    background: promoMintColors.indigo,
+    background: couponStripColors.indigo,
     color: "#fff",
     padding: "4px 12px",
     borderRadius: 999,
@@ -495,26 +495,26 @@ export default function Pricing() {
   };
 
   const popularBadge = {
-    background: promoMintColors.mint,
-    color: promoMintColors.text,
+    background: couponStripColors.mint,
+    color: couponStripColors.text,
     padding: "4px 12px",
     borderRadius: 999,
     fontSize: 12,
   };
 
-  const freeButtonStyle = promoMintStyles.secondaryButton;
-  const premiumButtonStyle = promoMintStyles.primaryButton;
-  const mutedTextStyle = { color: promoMintColors.mutedText };
+  const freeButtonStyle = couponStripStyles.secondaryButton;
+  const premiumButtonStyle = couponStripStyles.primaryButton;
+  const mutedTextStyle = { color: couponStripColors.mutedText };
   const pageIntroStyle = {
-    color: promoMintColors.mutedText,
+    color: couponStripColors.mutedText,
     marginBottom: 18,
   };
-  const priceStyle = { fontSize: 34, color: promoMintColors.text };
+  const priceStyle = { fontSize: 34, color: couponStripColors.text };
   const sectionSpacingStyle = { marginTop: 14 };
   const actionSpacingStyle = { marginTop: 18 };
-  const cardHeadingStyle = { color: promoMintColors.text };
+  const cardHeadingStyle = { color: couponStripColors.text };
 
-  const planPageTitle = "Choose your PromoMint plan";
+  const planPageTitle = "Choose your Coupon Strip plan";
   const planIntro =
     "Pick the plan that matches how many coupon offers you want to feature on your product pages.";
 

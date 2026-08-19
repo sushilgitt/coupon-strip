@@ -1,7 +1,7 @@
 {% comment %}
-  Coupons are managed in the PromoMint admin app, which creates a REAL Shopify
+  Coupons are managed in the Coupon Strip admin app, which creates a REAL Shopify
   discount for each one and mirrors them to the shop metafield
-  custom.promomint_coupons (type json). This block renders ONLY those real,
+  custom.coupon_strip_coupons (type json). This block renders ONLY those real,
   app-managed coupons — there is no theme-editor code entry and no demo
   fallback, so every code shown here actually reduces the price at checkout.
   coupon_limit (3 free / 6 premium) caps how many are shown. If the store has
@@ -19,7 +19,7 @@
   {% assign coupon_limit = 6 %}
 {% endif %}
 
-{% assign app_coupons = shop.metafields.custom.promomint_coupons.value %}
+{% assign app_coupons = shop.metafields.custom.coupon_strip_coupons.value %}
 
 {% if app_coupons and app_coupons.size > 0 %}
 
@@ -238,7 +238,7 @@
 
 {% schema %}
 {
-  "name": "PromoMint Coupon Offers",
+  "name": "Coupon Strip Offers",
   "target": "section",
   "enabled_on": { "templates": ["product"] },
   "settings": [
@@ -262,7 +262,7 @@
     { "type": "checkbox", "id": "show_arrows", "label": "Show arrows", "default": true },
 
     { "type": "header", "content": "Coupons" },
-    { "type": "paragraph", "content": "Coupons are managed in the PromoMint app (Coupons page). Each one creates a real Shopify discount that works at checkout and appears here automatically — Free plan shows up to 3, Premium up to 6." }
+    { "type": "paragraph", "content": "Coupons are managed in the Coupon Strip app (Coupons page). Each one creates a real Shopify discount that works at checkout and appears here automatically — Free plan shows up to 3, Premium up to 6." }
   ]
 }
 {% endschema %}

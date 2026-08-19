@@ -16,7 +16,7 @@ import {
 } from "@shopify/polaris";
 import { Redirect } from "@shopify/app-bridge/actions";
 import { useAppBridge } from "@shopify/app-bridge-react";
-import { promoMintColors, promoMintStyles } from "../brand";
+import { couponStripColors, couponStripStyles } from "../brand";
 import {
   useAuthenticatedFetch,
   isReauthorizationInProgressError,
@@ -323,7 +323,7 @@ export default function Coupons() {
               </p>
               {tier !== "premium" && (
                 <div style={{ marginTop: 12 }}>
-                  <Button onClick={goToPricing} style={promoMintStyles.primaryButton}>
+                  <Button onClick={goToPricing} style={couponStripStyles.primaryButton}>
                     See Premium
                   </Button>
                 </div>
@@ -336,7 +336,7 @@ export default function Coupons() {
           <Card
             sectioned
             title={isEditing ? "Edit coupon" : "Add a coupon"}
-            style={promoMintStyles.accentCard}
+            style={couponStripStyles.accentCard}
           >
             <Form onSubmit={submit}>
               <FormLayout>
@@ -400,14 +400,14 @@ export default function Coupons() {
                     primary
                     loading={saving}
                     disabled={!canSubmit || addDisabled}
-                    style={promoMintStyles.primaryButton}
+                    style={couponStripStyles.primaryButton}
                   >
                     {isEditing ? "Save changes" : "Add coupon"}
                   </Button>
                 </Stack>
 
                 {addDisabled && (
-                  <p style={{ color: promoMintColors.mutedText }}>
+                  <p style={{ color: couponStripColors.mutedText }}>
                     You've reached your plan limit. Delete a coupon or upgrade to
                     add more.
                   </p>
@@ -421,7 +421,7 @@ export default function Coupons() {
           <Card
             sectioned
             title={`Your coupons (${coupons.length}/${limit})`}
-            style={promoMintStyles.accentCard}
+            style={couponStripStyles.accentCard}
           >
             {loading ? (
               <Stack distribution="center">
@@ -429,7 +429,7 @@ export default function Coupons() {
               </Stack>
             ) : coupons.length === 0 ? (
               <TextContainer>
-                <p style={{ color: promoMintColors.mutedText }}>
+                <p style={{ color: couponStripColors.mutedText }}>
                   No coupons yet. Add your first coupon to start showing real
                   discount codes on your product pages.
                 </p>
@@ -440,20 +440,20 @@ export default function Coupons() {
                   <div
                     key={coupon.id}
                     style={{
-                      border: `1px solid ${promoMintColors.border}`,
+                      border: `1px solid ${couponStripColors.border}`,
                       borderRadius: 12,
                       padding: 14,
                     }}
                   >
                     <Stack alignment="center" distribution="equalSpacing">
                       <Stack vertical spacing="extraTight">
-                        <strong style={{ color: promoMintColors.text }}>
+                        <strong style={{ color: couponStripColors.text }}>
                           {coupon.title}
                         </strong>
-                        <span style={{ color: promoMintColors.mutedText }}>
+                        <span style={{ color: couponStripColors.mutedText }}>
                           Code: <b>{coupon.code}</b>
                         </span>
-                        <span style={{ color: promoMintColors.mutedText }}>
+                        <span style={{ color: couponStripColors.mutedText }}>
                           {formatCouponSummary(coupon, currency)}
                         </span>
                       </Stack>

@@ -1,4 +1,4 @@
-export const promoMintColors = {
+export const couponStripColors = {
   indigo: "#5f4638",
   indigoDark: "#3c2a21",
   mint: "#d8c2a8",
@@ -12,34 +12,34 @@ export const promoMintColors = {
   shadowStrong: "rgba(95, 70, 56, 0.22)",
 };
 
-export const promoMintStyles = {
+export const couponStripStyles = {
   appFrame: {
     minHeight: "100vh",
-    background: `linear-gradient(180deg, ${promoMintColors.indigoSoft} 0%, ${promoMintColors.mintSoft} 26%, #fffaf5 100%)`,
-    color: promoMintColors.text,
+    background: `linear-gradient(180deg, ${couponStripColors.indigoSoft} 0%, ${couponStripColors.mintSoft} 26%, #fffaf5 100%)`,
+    color: couponStripColors.text,
   },
   heroCard: {
     borderRadius: 18,
-    border: `1px solid ${promoMintColors.border}`,
-    boxShadow: `0 12px 30px ${promoMintColors.shadow}`,
-    background: `linear-gradient(135deg, #fffaf5 0%, ${promoMintColors.mintSoft} 100%)`,
+    border: `1px solid ${couponStripColors.border}`,
+    boxShadow: `0 12px 30px ${couponStripColors.shadow}`,
+    background: `linear-gradient(135deg, #fffaf5 0%, ${couponStripColors.mintSoft} 100%)`,
   },
   accentCard: {
     borderRadius: 18,
-    border: `1px solid ${promoMintColors.border}`,
-    boxShadow: `0 10px 26px ${promoMintColors.shadow}`,
+    border: `1px solid ${couponStripColors.border}`,
+    boxShadow: `0 10px 26px ${couponStripColors.shadow}`,
     background: "#fffaf5",
   },
   primaryButton: {
-    background: `linear-gradient(135deg, ${promoMintColors.indigo} 0%, ${promoMintColors.indigoDark} 100%)`,
+    background: `linear-gradient(135deg, ${couponStripColors.indigo} 0%, ${couponStripColors.indigoDark} 100%)`,
     color: "#ffffff",
     border: "none",
     fontWeight: 600,
   },
   secondaryButton: {
     background: "#efe2d3",
-    color: promoMintColors.text,
-    border: `1px solid ${promoMintColors.borderStrong}`,
+    color: couponStripColors.text,
+    border: `1px solid ${couponStripColors.borderStrong}`,
     fontWeight: 600,
   },
 };

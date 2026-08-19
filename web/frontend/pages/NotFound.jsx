@@ -1,11 +1,11 @@
 import { Card, EmptyState, Page } from "@shopify/polaris";
 import { notFoundImage } from "../assets";
-import { promoMintStyles } from "../brand";
+import { couponStripStyles } from "../brand";
 
 export default function NotFound() {
   return (
     <Page>
-      <Card sectioned style={promoMintStyles.accentCard}>
+      <Card sectioned style={couponStripStyles.accentCard}>
         <EmptyState
           heading="This page isn’t available"
           image={notFoundImage}

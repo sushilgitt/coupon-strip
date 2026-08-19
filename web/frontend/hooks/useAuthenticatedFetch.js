@@ -2,9 +2,9 @@ import { authenticatedFetch } from "@shopify/app-bridge-utils";
 import { useAppBridge } from "@shopify/app-bridge-react";
 import { Redirect } from "@shopify/app-bridge/actions";
 
-const RETURN_TO_STORAGE_KEY = "promomint:returnTo";
-const PENDING_PLAN_STORAGE_KEY = "promomint:pendingPlan";
-const REAUTH_GUARD_STORAGE_KEY = "promomint:reauthGuard";
+const RETURN_TO_STORAGE_KEY = "couponStrip:returnTo";
+const PENDING_PLAN_STORAGE_KEY = "couponStrip:pendingPlan";
+const REAUTH_GUARD_STORAGE_KEY = "couponStrip:reauthGuard";
 const REAUTH_GUARD_WINDOW_MS = 60000;
 
 /**

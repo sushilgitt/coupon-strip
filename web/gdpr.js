@@ -1,7 +1,7 @@
 import { DeliveryMethod } from "@shopify/shopify-api";
 import shopify from "./shopify.js";
 
-// PromoLoom data inventory (kept here so the rationale lives with the handlers
+// Coupon Strip data inventory (kept here so the rationale lives with the handlers
 // that act on it):
 //   - Offline Shopify sessions in MongoDB (shop domain + access token, keyed by
 //     shopify.api.session.getOfflineId(shop)).
@@ -63,7 +63,7 @@ export default {
 
   /**
    * Store owners can request that data is deleted on behalf of a customer.
-   * PromoLoom does not store customer PII, so there is nothing to delete here.
+   * Coupon Strip does not store customer PII, so there is nothing to delete here.
    *
    * https://shopify.dev/docs/apps/webhooks/configuration/mandatory-webhooks#customers-redact
    */

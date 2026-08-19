@@ -53,7 +53,7 @@ const APP_META_KEY = "mx-pdp-coupon";
 const APP_INSTALL_METAFIELD = "mx-pdp-coupon-code-premium";
 
 const BILLING_TEST_MODE_ENV = "SHOPIFY_BILLING_TEST_MODE";
-const AUTH_RETURN_TO_COOKIE = "promomint_auth_return_to";
+const AUTH_RETURN_TO_COOKIE = "coupon_strip_auth_return_to";
 
 const parseBooleanEnv = (name) => {
   const rawValue = process.env[name];
@@ -274,7 +274,7 @@ const sanitizeReturnPath = (value) => {
   if (trimmedValue.startsWith("//")) return "";
 
   try {
-    const parsed = new URL(trimmedValue, "https://promomint.local");
+    const parsed = new URL(trimmedValue, "https://coupon-strip.local");
     return `${parsed.pathname}${parsed.search}`;
   } catch {
     return "";
