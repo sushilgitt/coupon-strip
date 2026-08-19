@@ -6,13 +6,10 @@ export default function NotFound() {
   return (
     <Page>
       <Card sectioned style={couponStripStyles.accentCard}>
-        <EmptyState
-          heading="This page isn’t available"
-          image={notFoundImage}
-        >
+        <EmptyState heading="We couldn't find that page" image={notFoundImage}>
           <p>
-            Double-check the address and try again, or use Shopify navigation
-            to return to the section you need.
+            The link may be out of date. Use the app navigation to jump to
+            Coupons, Plans, or Help.
           </p>
         </EmptyState>
       </Card>

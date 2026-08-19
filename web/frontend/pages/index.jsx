@@ -1,11 +1,5 @@
 import { useNavigate, useLocation } from "react-router-dom";
-import {
-  Button,
-  Card,
-  Layout,
-  Page,
-  TextContainer,
-} from "@shopify/polaris";
+import { Button, Card, Layout, Page, Stack, TextContainer } from "@shopify/polaris";
 import { couponStripColors, couponStripStyles } from "../brand";
 
 const decodeHost = (host) => {
@@ -53,9 +47,28 @@ const withEmbeddedParams = (path, currentSearch) => {
   return query ? `${pathname}?${query}` : pathname;
 };
 
+const SETUP_STEPS = [
+  {
+    title: "Add the block to your product template",
+    body: "In your theme editor, open a product template and add the Coupon Strip Offers app block wherever you want the strip to appear.",
+  },
+  {
+    title: "Create your discount codes",
+    body: "Add codes on the Coupons page. Each one becomes a genuine Shopify discount, so it reduces the price at checkout — not just on screen.",
+  },
+  {
+    title: "Publish and check a live product",
+    body: "Save the template, then open any product page. Shoppers can swipe the strip and tap to copy a code.",
+  },
+];
+
+const mutedStyle = { color: couponStripColors.mutedText };
+
 export default function HomePage() {
   const navigate = useNavigate();
   const location = useLocation();
+
+  const go = (path) => navigate(withEmbeddedParams(path, location.search));
 
   return (
     <Page title="Coupon Strip">
@@ -63,57 +76,69 @@ export default function HomePage() {
         <Layout.Section>
           <Card sectioned style={couponStripStyles.heroCard}>
             <TextContainer spacing="loose">
-              <h2 style={{ color: couponStripColors.text }}>Display coupon offers where shoppers need them</h2>
-              <p style={{ color: couponStripColors.mutedText }}>
-                Coupon Strip lets you place coupon offers directly on product pages
-                so customers can spot available savings and copy codes quickly.
+              <h2 style={{ color: couponStripColors.text, fontSize: 22, fontWeight: 650 }}>
+                Turn discount codes into a strip shoppers actually notice
+              </h2>
+              <p style={mutedStyle}>
+                Savings buried in a banner get missed. Coupon Strip puts your live
+                codes on the product page itself, right where the buying decision
+                happens, so shoppers can grab one without hunting for it.
               </p>
-              <p style={{ color: couponStripColors.mutedText }}>
-                To get started, add the Coupon Strip Offers app block to your
-                product template in the theme editor, then create your coupons on
-                the Coupons page. Each coupon becomes a real Shopify discount, so
-                the code actually reduces the price at checkout.
-              </p>
+              <Stack spacing="tight">
+                <Button
+                  primary
+                  style={couponStripStyles.primaryButton}
+                  onClick={() => go("/coupons")}
+                >
+                  Create a coupon
+                </Button>
+                <Button
+                  style={couponStripStyles.secondaryButton}
+                  onClick={() => go("/pricing")}
+                >
+                  Compare plans
+                </Button>
+              </Stack>
             </TextContainer>
           </Card>
         </Layout.Section>
 
-        <Layout.Section oneHalf>
-          <Card sectioned title="Getting started" style={couponStripStyles.accentCard}>
-            <TextContainer spacing="loose">
-              <p style={{ color: couponStripColors.mutedText }}>
-                Place the Coupon Strip Offers app block on your product
-                template in the theme editor, then create the discount codes you
-                want to show on the Coupons page.
-              </p>
-              <Button
-                style={couponStripStyles.primaryButton}
-                onClick={() =>
-                  navigate(withEmbeddedParams("/coupons", location.search))
-                }
-              >
-                Manage coupons
-              </Button>
-            </TextContainer>
+        <Layout.Section>
+          <Card sectioned title="Three steps to go live" style={couponStripStyles.accentCard}>
+            <Stack vertical spacing="loose">
+              {SETUP_STEPS.map((step, index) => (
+                <Stack key={step.title} wrap={false} spacing="loose" alignment="leading">
+                  <span style={couponStripStyles.stepBadge}>{index + 1}</span>
+                  <Stack.Item fill>
+                    <p style={{ color: couponStripColors.text, fontWeight: 600, marginBottom: 4 }}>
+                      {step.title}
+                    </p>
+                    <p style={mutedStyle}>{step.body}</p>
+                  </Stack.Item>
+                </Stack>
+              ))}
+            </Stack>
           </Card>
         </Layout.Section>
 
-        <Layout.Section oneHalf>
-          <Card sectioned title="Plans" style={couponStripStyles.accentCard}>
-            <TextContainer spacing="loose">
-              <p style={{ color: couponStripColors.mutedText }}>
-                Compare the available plan options and choose the one that fits
-                your store.
-              </p>
+        <Layout.Section>
+          <Card sectioned style={couponStripStyles.accentCard}>
+            <Stack alignment="center" distribution="equalSpacing" wrap={false}>
+              <Stack.Item fill>
+                <p style={{ color: couponStripColors.text, fontWeight: 600, marginBottom: 4 }}>
+                  Need more than three offers running at once?
+                </p>
+                <p style={mutedStyle}>
+                  The free plan keeps three codes live. Premium raises that to six.
+                </p>
+              </Stack.Item>
               <Button
-                style={couponStripStyles.primaryButton}
-                onClick={() =>
-                  navigate(withEmbeddedParams("/pricing", location.search))
-                }
+                style={couponStripStyles.secondaryButton}
+                onClick={() => go("/pricing")}
               >
-                See plan details
+                See plans
               </Button>
-            </TextContainer>
+            </Stack>
           </Card>
         </Layout.Section>
       </Layout>

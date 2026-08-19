@@ -480,14 +480,14 @@ export default function Pricing() {
       : `0 8px 24px ${couponStripColors.shadow}`,
     background:
       plan === "premium"
-        ? `linear-gradient(180deg, #ffffff 0%, ${couponStripColors.indigoSoft} 100%)`
-        : `linear-gradient(180deg, #ffffff 0%, ${couponStripColors.mintSoft} 100%)`,
+        ? `linear-gradient(180deg, #ffffff 0%, ${couponStripColors.primarySoft} 100%)`
+        : `linear-gradient(180deg, #ffffff 0%, ${couponStripColors.accentSoft} 100%)`,
     transform: isCurrent(plan) ? "translateY(-4px)" : "none",
     transition: "all 0.2s ease",
   });
 
   const currentBadge = {
-    background: couponStripColors.indigo,
+    background: couponStripColors.primary,
     color: "#fff",
     padding: "4px 12px",
     borderRadius: 999,
@@ -495,7 +495,7 @@ export default function Pricing() {
   };
 
   const popularBadge = {
-    background: couponStripColors.mint,
+    background: couponStripColors.accent,
     color: couponStripColors.text,
     padding: "4px 12px",
     borderRadius: 999,
@@ -514,9 +514,9 @@ export default function Pricing() {
   const actionSpacingStyle = { marginTop: 18 };
   const cardHeadingStyle = { color: couponStripColors.text };
 
-  const planPageTitle = "Choose your Coupon Strip plan";
+  const planPageTitle = "Plans";
   const planIntro =
-    "Pick the plan that matches how many coupon offers you want to feature on your product pages.";
+    "Both plans include the full product-page strip. The difference is how many codes you can run at once.";
 
   const pageContent = (
     <Layout>
@@ -528,7 +528,7 @@ export default function Pricing() {
           </Stack>
 
           <h1 style={priceStyle}>$0</h1>
-          <p style={mutedTextStyle}>A simple option for smaller catalogs</p>
+          <p style={mutedTextStyle}>Everything you need to run a few offers</p>
 
           <Stack vertical spacing="loose" style={sectionSpacingStyle}>
             <Feature>Display coupon offers on product pages</Feature>

@@ -298,7 +298,7 @@ export default function Coupons() {
   return (
     <Page
       title="Coupons"
-      subtitle="Create real discount codes that reduce the price at checkout and show on your product pages."
+      subtitle="Codes you add here become live Shopify discounts and appear in the strip on your product pages."
     >
       <Layout>
         {!!banner.msg && (
@@ -347,7 +347,7 @@ export default function Coupons() {
                     setForm((f) => ({ ...f, code: value.toUpperCase() }))
                   }
                   autoComplete="off"
-                  helpText="Shoppers type this at checkout. Letters, numbers, - and _ only."
+                  helpText="What shoppers enter at checkout. Letters, numbers, hyphens and underscores."
                   disabled={addDisabled}
                 />
                 <TextField
@@ -355,7 +355,7 @@ export default function Coupons() {
                   value={form.title}
                   onChange={(value) => setForm((f) => ({ ...f, title: value }))}
                   autoComplete="off"
-                  helpText="Shown on the product page, e.g. “Shop $50+ Get 15% OFF”."
+                  helpText="The line shoppers read in the strip, e.g. “Spend $50, save 15%”."
                   disabled={addDisabled}
                 />
                 <Select
@@ -385,7 +385,7 @@ export default function Coupons() {
                   }
                   autoComplete="off"
                   min={0}
-                  helpText="Leave blank for no minimum."
+                  helpText="Leave empty to let the code apply to any cart total."
                   disabled={addDisabled}
                 />
 
@@ -430,8 +430,8 @@ export default function Coupons() {
             ) : coupons.length === 0 ? (
               <TextContainer>
                 <p style={{ color: couponStripColors.mutedText }}>
-                  No coupons yet. Add your first coupon to start showing real
-                  discount codes on your product pages.
+                  Nothing here yet. Your first code will appear in the strip as soon
+                  as you add it.
                 </p>
               </TextContainer>
             ) : (
