@@ -93,7 +93,7 @@ export default function Pricing() {
   const [confirm, setConfirm] = useState({ open: false, target: null });
   const [banner, setBanner] = useState({ msg: "", status: null });
 
-  const PRICE = "19";
+  const PRICE = "15";
 
   const selectedPlan = useMemo(() => {
     if (serverTier !== "free" && serverTier !== "premium") {

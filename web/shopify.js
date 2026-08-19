@@ -8,7 +8,7 @@ import {
   mongoSessionCollection,
 } from "./mongo-config.js";
 const PREMIUM_PLAN = "Premium";
-const PREMIUM_PLAN_PRICE = 19;
+const PREMIUM_PLAN_PRICE = 15;
 // NOTE: The Shopify App Billing API (charging merchants for this app) requires
 // NO dedicated access scope — an app can always manage its own subscriptions.
 // It does require the app to use *public* distribution. The previously
