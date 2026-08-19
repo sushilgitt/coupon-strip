@@ -1,5 +1,5 @@
 import { defineConfig, loadEnv } from "vite";
-import { dirname, resolve } from "path";
+import { dirname } from "path";
 import { fileURLToPath } from "url";
 import react from "@vitejs/plugin-react";
 
@@ -62,19 +62,6 @@ export default defineConfig(({ mode }) => {
       "process.env.SHOPIFY_API_KEY": JSON.stringify(shopifyApiKey),
     },
     resolve: {
-      alias: [
-        {
-          find: /^@shopify\/app-bridge-core$/,
-          replacement: resolve(root, "node_modules/@shopify/app-bridge-core"),
-        },
-        {
-          find: /^@shopify\/app-bridge-core\/(.*)$/,
-          replacement: `${resolve(
-            root,
-            "node_modules/@shopify/app-bridge-core"
-          )}/$1`,
-        },
-      ],
       preserveSymlinks: true,
     },
     server: {

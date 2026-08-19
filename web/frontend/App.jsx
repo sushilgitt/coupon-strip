@@ -1,6 +1,5 @@
 import { useEffect, useMemo, useRef } from "react";
 import { BrowserRouter, useLocation, useNavigate } from "react-router-dom";
-import { NavigationMenu } from "@shopify/app-bridge-react";
 import Routes from "./Routes";
 import { ErrorBoundary } from "./components/ErrorBoundary";
 import { hasRecentReauthAttempt } from "./hooks";
@@ -110,28 +109,35 @@ function ResumeStoredRoute() {
   return null;
 }
 
+// App Bridge v4 renders the admin nav from the <ui-nav-menu> web component
+// instead of v3's <NavigationMenu navigationLinks={...} />. The first anchor
+// must carry rel="home". Embedded params are preserved on each href so a
+// full-page load still lands with shop/host intact.
 function EmbeddedNavigationMenu() {
   const location = useLocation();
-  const navigationLinks = useMemo(
+  const links = useMemo(
     () => [
-      { label: "Overview", destination: withEmbeddedParams("/", location.search) },
-      {
-        label: "Coupons",
-        destination: withEmbeddedParams("/coupons", location.search),
-      },
-      {
-        label: "Plans",
-        destination: withEmbeddedParams("/pricing", location.search),
-      },
-      {
-        label: "Help",
-        destination: withEmbeddedParams("/support", location.search),
-      },
+      { label: "Overview", path: "/", home: true },
+      { label: "Coupons", path: "/coupons" },
+      { label: "Plans", path: "/pricing" },
+      { label: "Help", path: "/support" },
     ],
-    [location.search]
+    []
   );
 
-  return <NavigationMenu navigationLinks={navigationLinks} />;
+  return (
+    <ui-nav-menu>
+      {links.map((link) => (
+        <a
+          key={link.path}
+          href={withEmbeddedParams(link.path, location.search)}
+          {...(link.home ? { rel: "home" } : {})}
+        >
+          {link.label}
+        </a>
+      ))}
+    </ui-nav-menu>
+  );
 }
 
 export default function App() {

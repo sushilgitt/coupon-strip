@@ -1,5 +1,6 @@
 // @ts-check
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import {
   Page,
   Layout,
@@ -14,8 +15,6 @@ import {
   Spinner,
   TextContainer,
 } from "@shopify/polaris";
-import { Redirect } from "@shopify/app-bridge/actions";
-import { useAppBridge } from "@shopify/app-bridge-react";
 import { couponStripColors, couponStripStyles } from "../brand";
 import {
   useAuthenticatedFetch,
@@ -77,9 +76,8 @@ const formatCouponSummary = (coupon, currency) => {
 };
 
 export default function Coupons() {
-  const app = useAppBridge();
+  const navigate = useNavigate();
   const fetchAuth = useAuthenticatedFetch();
-  const redirect = useMemo(() => Redirect.create(app), [app]);
 
   const shop = getCurrentShop();
   const host = getCurrentHost();
@@ -281,7 +279,7 @@ export default function Coupons() {
   };
 
   const goToPricing = () => {
-    redirect.dispatch(Redirect.Action.APP, withShopQuery("/pricing"));
+    navigate(withShopQuery("/pricing"));
   };
 
   const canSubmit =

@@ -1,17 +1,24 @@
 import { useCallback } from "react";
 import { AppProvider } from "@shopify/polaris";
-import { useNavigate } from "@shopify/app-bridge-react";
+import { useNavigate } from "react-router-dom";
 import translations from "@shopify/polaris/locales/en.json";
 import "@shopify/polaris/build/esm/styles.css";
 import { couponStripStyles } from "../../brand";
 
+const IS_EXTERNAL_LINK_REGEX = /^(?:[a-z][a-z\d+.-]*:|\/\/)/;
+
+// Polaris links route through React Router. Under App Bridge v4 the admin URL
+// stays in sync with the iframe's history automatically, so a client-side
+// navigation is all that is needed -- v3's app-bridge useNavigate is gone.
 function AppBridgeLink({ url, children, external, ...rest }) {
   const navigate = useNavigate();
-  const handleClick = useCallback(() => {
-    navigate(url);
-  }, [url]);
-
-  const IS_EXTERNAL_LINK_REGEX = /^(?:[a-z][a-z\d+.-]*:|\/\/)/;
+  const handleClick = useCallback(
+    (event) => {
+      event.preventDefault();
+      navigate(url);
+    },
+    [navigate, url]
+  );
 
   if (external || IS_EXTERNAL_LINK_REGEX.test(url)) {
     return (
@@ -22,32 +29,12 @@ function AppBridgeLink({ url, children, external, ...rest }) {
   }
 
   return (
-    <a {...rest} onClick={handleClick}>
+    <a {...rest} href={url} onClick={handleClick}>
       {children}
     </a>
   );
 }
 
-/**
- * Sets up the AppProvider from Polaris.
- * @desc PolarisProvider passes a custom link component to Polaris.
- * The Link component handles navigation within an embedded app.
- * Prefer using this vs any other method such as an anchor.
- * Use it by importing Link from Polaris, e.g:
- *
- * ```
- * import {Link} from '@shopify/polaris'
- *
- * function MyComponent() {
- *  return (
- *    <div><Link url="/tab2">Tab 2</Link></div>
- *  )
- * }
- * ```
- *
- * PolarisProvider also passes translations to Polaris.
- *
- */
 export function PolarisProvider({ children }) {
   return (
     <AppProvider i18n={translations} linkComponent={AppBridgeLink}>

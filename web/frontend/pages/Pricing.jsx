@@ -13,12 +13,11 @@ import {
 } from "@shopify/polaris";
 import { couponStripColors, couponStripStyles } from "../brand";
 import { CircleTickMinor } from "@shopify/polaris-icons";
-import { Redirect } from "@shopify/app-bridge/actions";
-import { useAppBridge } from "@shopify/app-bridge-react";
 import {
   useAuthenticatedFetch,
   isReauthorizationInProgressError,
   hasRecentReauthAttempt,
+  redirectTopLevel,
 } from "../hooks";
 
 const PENDING_PLAN_STORAGE_KEY = "couponStrip:pendingPlan";
@@ -70,9 +69,7 @@ const getBillingReturnState = () => {
 };
 
 export default function Pricing() {
-  const app = useAppBridge();
   const fetchAuth = useAuthenticatedFetch();
-  const redirect = Redirect.create(app);
   const resumeAttemptedRef = useRef(false);
   const reauthRecoveryTimeoutRef = useRef(/** @type {ReturnType<typeof setTimeout> | null} */ (null));
   const reauthRecoveryStartedRef = useRef(false);
@@ -277,7 +274,7 @@ export default function Pricing() {
     }
 
     if (data.confirmationUrl) {
-      redirect.dispatch(Redirect.Action.REMOTE, String(data.confirmationUrl));
+      redirectTopLevel(String(data.confirmationUrl));
       return { redirected: true, tier: data.tier };
     }
 
