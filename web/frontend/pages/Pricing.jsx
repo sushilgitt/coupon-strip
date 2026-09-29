@@ -7,6 +7,7 @@ import {
   Button,
   Banner,
   Stack,
+  ButtonGroup,
   Modal,
   TextContainer,
   Icon,
@@ -24,6 +25,19 @@ const PENDING_PLAN_STORAGE_KEY = "couponStrip:pendingPlan";
 const RETURN_TO_STORAGE_KEY = "couponStrip:returnTo";
 const REQUEST_TIMEOUT_MS = 15000;
 const REAUTH_RECOVERY_RETRY_MS = 16000;
+
+// Premium is one tier billed two ways. Slugs match the backend
+// (PREMIUM_PLANS_BY_SLUG in web/index.js).
+const PREMIUM_PLANS = {
+  monthly: { slug: "premium", price: 30, period: "month" },
+  annual: { slug: "premium_annual", price: 300, period: "year" },
+};
+const ANNUAL_SAVINGS =
+  PREMIUM_PLANS.monthly.price * 12 - PREMIUM_PLANS.annual.price;
+const isPremiumSlug = (plan) =>
+  plan === PREMIUM_PLANS.monthly.slug || plan === PREMIUM_PLANS.annual.slug;
+const getPremiumPlanBySlug = (slug) =>
+  slug === PREMIUM_PLANS.annual.slug ? PREMIUM_PLANS.annual : PREMIUM_PLANS.monthly;
 
 const decodeHost = (host) => {
   if (!host) return "";
@@ -86,11 +100,26 @@ export default function Pricing() {
   const [serverTier, setServerTier] = useState(
     /** @type {"free" | "premium" | null} */ (null)
   );
+  const [serverPlanSlug, setServerPlanSlug] = useState(
+    /** @type {string | null} */ (null)
+  );
+  const [billingCycle, setBillingCycle] = useState(
+    /** @type {"monthly" | "annual"} */ ("monthly")
+  );
   const [loading, setLoading] = useState({ page: true, action: null });
   const [confirm, setConfirm] = useState({ open: false, target: null });
   const [banner, setBanner] = useState({ msg: "", status: null });
 
-  const PRICE = "15";
+  const selectedPremiumPlan = PREMIUM_PLANS[billingCycle];
+
+  const applyServerPlan = (tier, planSlug) => {
+    setServerTier(tier);
+    const nextSlug = tier === "premium" ? planSlug || PREMIUM_PLANS.monthly.slug : null;
+    setServerPlanSlug(nextSlug);
+    if (nextSlug) {
+      setBillingCycle(nextSlug === PREMIUM_PLANS.annual.slug ? "annual" : "monthly");
+    }
+  };
 
   const selectedPlan = useMemo(() => {
     if (serverTier !== "free" && serverTier !== "premium") {
@@ -138,7 +167,7 @@ export default function Pricing() {
 
     setBanner({
       msg:
-        pendingPlan === "premium"
+        isPremiumSlug(pendingPlan)
           ? "Authentication restored. Resuming the Premium billing flow."
           : "Authentication restored. Resuming the Free plan change.",
       status: "info",
@@ -251,7 +280,7 @@ export default function Pricing() {
       }
 
       clearPendingBillingResume();
-      setServerTier("free");
+      applyServerPlan("free", null);
       if (!silent) {
         setBanner({ msg: "Your store is now on the Free plan.", status: "success" });
       }
@@ -260,13 +289,16 @@ export default function Pricing() {
 
     const data = await postPlanAction(
       "/api/createSubscription",
-      "premium",
+      plan,
       "We couldn’t start the Premium subscription."
     );
 
-    if (data.isActiveSubscription) {
+    // Only "done" when the requested billing cycle is the one now active; when
+    // switching monthly <-> annual the old plan is still active and Shopify
+    // returns an approval link instead.
+    if (data.isActiveSubscription && data.planSlug === plan && !data.confirmationUrl) {
       clearPendingBillingResume();
-      setServerTier("premium");
+      applyServerPlan("premium", data.planSlug);
       if (!silent) {
         setBanner({ msg: "Your Premium plan is already active.", status: "success" });
       }
@@ -306,7 +338,7 @@ export default function Pricing() {
 
       clearReauthRecoveryTimeout();
       reauthRecoveryStartedRef.current = false;
-      setServerTier(data.tier);
+      applyServerPlan(data.tier, data.planSlug);
       setBanner((currentBanner) => {
         if (currentBanner.status === "critical" || currentBanner.status === "warning") {
           return { msg: "", status: null };
@@ -315,7 +347,11 @@ export default function Pricing() {
         return currentBanner;
       });
 
-      return data.tier;
+      // The active premium slug, or null on Free -- callers compare it to the
+      // plan the merchant just approved.
+      return data.tier === "premium"
+        ? data.planSlug || PREMIUM_PLANS.monthly.slug
+        : null;
     } catch (error) {
       if (isReauthorizationInProgressError(error)) {
         scheduleReauthRecovery();
@@ -323,7 +359,7 @@ export default function Pricing() {
       }
 
       if (!allowSoftFailure) {
-        setServerTier(null);
+        applyServerPlan(null, null);
         setBanner({
           msg:
             error instanceof Error
@@ -355,18 +391,33 @@ export default function Pricing() {
         showResumeBanner(pendingPlan);
       }
 
-      const tier = await refreshTier({
+      const planSlug = await refreshTier({
         allowSoftFailure: billingReturnState.isBillingReturn || !!pendingPlan,
       });
 
       if (billingReturnState.isBillingReturn) {
         clearBillingReturnParams();
 
-        if (tier === "premium") {
+        if (planSlug && planSlug === billingReturnState.plan) {
           clearPendingBillingResume();
           setBanner({
-            msg: "Premium billing approved. Your store is now on the Premium plan.",
+            msg:
+              planSlug === PREMIUM_PLANS.annual.slug
+                ? "Premium billing approved. Your store is now on Premium, billed yearly."
+                : "Premium billing approved. Your store is now on Premium, billed monthly.",
             status: "success",
+          });
+          return;
+        }
+
+        // Still premium on the other cycle: a yearly -> monthly downgrade is
+        // deferred by Shopify until the paid period ends.
+        if (planSlug && isPremiumSlug(billingReturnState.plan)) {
+          clearPendingBillingResume();
+          setBanner({
+            msg:
+              "Your billing change was submitted. Your current Premium subscription stays active until Shopify switches it over at the end of the paid period.",
+            status: "info",
           });
           return;
         }
@@ -391,7 +442,7 @@ export default function Pricing() {
             await refreshTier({ allowSoftFailure: true });
             setBanner({
               msg:
-                pendingPlan === "premium"
+                isPremiumSlug(pendingPlan)
                   ? "Premium plan restored after reauthorization."
                   : "Free plan restored after reauthorization.",
               status: "success",
@@ -422,7 +473,7 @@ export default function Pricing() {
   }, []);
 
   const openConfirm = (plan) => {
-    if (loading.page || loading.action || plan === selectedPlan || !selectedPlan) {
+    if (loading.page || loading.action || isCurrent(plan) || !selectedPlan) {
       return;
     }
 
@@ -457,7 +508,11 @@ export default function Pricing() {
     }
   };
 
-  const isCurrent = (plan) => selectedPlan === plan;
+  // "free" and "premium" compare against the tier; a premium slug compares
+  // against the exact billing cycle the shop is subscribed to.
+  const isCurrent = (plan) =>
+    isPremiumSlug(plan) ? serverPlanSlug === plan : selectedPlan === plan;
+  const isOnPremium = selectedPlan === "premium";
   const hasResolvedPlan = selectedPlan === "free" || selectedPlan === "premium";
 
   const Feature = ({ children }) => (
@@ -467,19 +522,24 @@ export default function Pricing() {
     </Stack>
   );
 
+  // Card highlight follows the tier; the premium card is "current" on either
+  // billing cycle.
+  const isCardCurrent = (card) =>
+    card === "premium" ? isOnPremium : isCurrent(card);
+
   const cardStyle = (plan) => ({
     borderRadius: 20,
-    border: isCurrent(plan)
+    border: isCardCurrent(plan)
       ? `2px solid ${couponStripColors.borderStrong}`
       : `1px solid ${couponStripColors.border}`,
-    boxShadow: isCurrent(plan)
+    boxShadow: isCardCurrent(plan)
       ? `0 18px 45px ${couponStripColors.shadowStrong}`
       : `0 8px 24px ${couponStripColors.shadow}`,
     background:
       plan === "premium"
         ? `linear-gradient(180deg, #ffffff 0%, ${couponStripColors.primarySoft} 100%)`
         : `linear-gradient(180deg, #ffffff 0%, ${couponStripColors.accentSoft} 100%)`,
-    transform: isCurrent(plan) ? "translateY(-4px)" : "none",
+    transform: isCardCurrent(plan) ? "translateY(-4px)" : "none",
     transition: "all 0.2s ease",
   });
 
@@ -510,6 +570,28 @@ export default function Pricing() {
   const sectionSpacingStyle = { marginTop: 14 };
   const actionSpacingStyle = { marginTop: 18 };
   const cardHeadingStyle = { color: couponStripColors.text };
+  const periodStyle = { fontSize: 16, fontWeight: 400, color: couponStripColors.mutedText };
+  const savingsBadge = {
+    display: "inline-block",
+    marginTop: 6,
+    background: couponStripColors.primarySoft,
+    color: couponStripColors.primaryDark,
+    padding: "2px 10px",
+    borderRadius: 999,
+    fontSize: 12,
+    fontWeight: 600,
+  };
+
+  const premiumSlug = selectedPremiumPlan.slug;
+  const premiumButtonLabel = isCurrent(premiumSlug)
+    ? "Premium is active"
+    : isOnPremium
+    ? billingCycle === "annual"
+      ? "Switch to yearly billing"
+      : "Switch to monthly billing"
+    : billingCycle === "annual"
+    ? "Choose Premium yearly"
+    : "Choose Premium monthly";
 
   const planPageTitle = "Plans";
   const planIntro =
@@ -553,14 +635,43 @@ export default function Pricing() {
         <Card sectioned style={cardStyle("premium")}>
           <Stack alignment="center" distribution="equalSpacing">
             <h2 style={cardHeadingStyle}>Premium</h2>
-            {!isCurrent("premium") && (
+            {!isOnPremium && (
               <span style={popularBadge}>Popular choice</span>
             )}
-            {isCurrent("premium") && <span style={currentBadge}>Current</span>}
+            {isOnPremium && <span style={currentBadge}>Current</span>}
           </Stack>
 
-          <h1 style={priceStyle}>${PRICE}</h1>
-          <p style={mutedTextStyle}>
+          <div style={{ marginTop: 12 }}>
+            <ButtonGroup segmented>
+              <Button
+                pressed={billingCycle === "monthly"}
+                onClick={() => setBillingCycle("monthly")}
+              >
+                Monthly
+              </Button>
+              <Button
+                pressed={billingCycle === "annual"}
+                onClick={() => setBillingCycle("annual")}
+              >
+                Yearly
+              </Button>
+            </ButtonGroup>
+          </div>
+
+          <h1 style={priceStyle}>
+            ${selectedPremiumPlan.price}
+            <span style={periodStyle}> / {selectedPremiumPlan.period}</span>
+          </h1>
+          {billingCycle === "annual" ? (
+            <span style={savingsBadge}>
+              Save ${ANNUAL_SAVINGS} a year (2 months free)
+            </span>
+          ) : (
+            <span style={savingsBadge}>
+              Pay yearly and save ${ANNUAL_SAVINGS}
+            </span>
+          )}
+          <p style={{ ...mutedTextStyle, marginTop: 8 }}>
             More room for stores running multiple offers
           </p>
 
@@ -576,11 +687,11 @@ export default function Pricing() {
             <Button
               fullWidth
               style={premiumButtonStyle}
-              disabled={!hasResolvedPlan || isCurrent("premium") || loading.page || !!loading.action}
-              loading={loading.action === "premium"}
-              onClick={() => openConfirm("premium")}
+              disabled={!hasResolvedPlan || isCurrent(premiumSlug) || loading.page || !!loading.action}
+              loading={loading.action === premiumSlug}
+              onClick={() => openConfirm(premiumSlug)}
             >
-              {isCurrent("premium") ? "Premium is active" : "Choose Premium"}
+              {premiumButtonLabel}
             </Button>
           </div>
         </Card>
@@ -597,13 +708,15 @@ export default function Pricing() {
         title={
           confirm.target === "free"
             ? "Move to the Free plan?"
-            : "Continue with Premium?"
+            : confirm.target === PREMIUM_PLANS.annual.slug
+            ? "Continue with Premium, billed yearly?"
+            : "Continue with Premium, billed monthly?"
         }
         primaryAction={{
           content:
             confirm.target === "free"
               ? "Confirm Free plan"
-              : `Approve $${PRICE}/month`,
+              : `Approve $${getPremiumPlanBySlug(confirm.target).price}/${getPremiumPlanBySlug(confirm.target).period}`,
           onAction: runConfirm,
           loading: loading.action === confirm.target,
           disabled: !confirm.target || loading.page || !!loading.action,
@@ -616,6 +729,12 @@ export default function Pricing() {
                 ? "The Free plan supports up to 3 coupon offers."
                 : "The Premium plan supports up to 6 coupon offers."}
             </p>
+            {isPremiumSlug(confirm.target) && isOnPremium && (
+              <p>
+                Shopify will ask you to approve the new billing cycle. Once
+                approved, it replaces your current Premium subscription.
+              </p>
+            )}
           </TextContainer>
         </Modal.Section>
       </Modal>

@@ -1,14 +1,14 @@
 import { GraphqlQueryError } from "@shopify/shopify-api";
-import shopify from "./shopify.js";
+import shopify, { PREMIUM_PLAN, PREMIUM_ANNUAL_PLAN } from "./shopify.js";
 
-const PREMIUM_PLAN = "Premium";
+const PREMIUM_PLANS = [PREMIUM_PLAN, PREMIUM_ANNUAL_PLAN];
 
 export default async function cancelSubscription(session) {
   const subscriptions = await getActiveSubscriptions(session);
   const subscriptionId = getActiveSubscriptionId(subscriptions);
 
   if (!subscriptionId) {
-    throw new Error("No active Premium subscription ID found for cancellation.");
+    throw new Error("No active Premium (monthly or annual) subscription ID found for cancellation.");
   }
 
   return appSubscriptionCancel(session, subscriptionId);
@@ -32,7 +32,8 @@ function getActiveSubscriptionId(subscriptions) {
   // reviewers) always produce test charges, so a mode-specific match would fail
   // to find the very subscription it needs to cancel.
   const premium = subscriptions.find(
-    (subscription) => subscription?.name === PREMIUM_PLAN && subscription?.id
+    (subscription) =>
+      PREMIUM_PLANS.includes(subscription?.name) && subscription?.id
   );
 
   if (premium?.id) {

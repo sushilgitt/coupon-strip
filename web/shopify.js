@@ -7,8 +7,13 @@ import {
   mongoDbUrl,
   mongoSessionCollection,
 } from "./mongo-config.js";
-const PREMIUM_PLAN = "Premium";
-const PREMIUM_PLAN_PRICE = 15;
+// Plan names are what Shopify stores on the subscription, so they must stay
+// stable: merchants already subscribed to "Premium" keep their original price
+// and are still detected as premium.
+export const PREMIUM_PLAN = "Premium";
+export const PREMIUM_ANNUAL_PLAN = "Premium Annual";
+const PREMIUM_PLAN_PRICE = 30;
+const PREMIUM_ANNUAL_PLAN_PRICE = 300;
 // NOTE: The Shopify App Billing API (charging merchants for this app) requires
 // NO dedicated access scope — an app can always manage its own subscriptions.
 // It does require the app to use *public* distribution. The previously
@@ -26,6 +31,11 @@ const billingConfig = {
     amount: PREMIUM_PLAN_PRICE,
     currencyCode: "USD",
     interval: BillingInterval.Every30Days,
+  },
+  [PREMIUM_ANNUAL_PLAN]: {
+    amount: PREMIUM_ANNUAL_PLAN_PRICE,
+    currencyCode: "USD",
+    interval: BillingInterval.Annual,
   },
 };
 

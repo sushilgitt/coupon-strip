@@ -16,7 +16,7 @@ const ID_TOKEN_SUBJECT_TYPE = "urn:ietf:params:oauth:token-type:id_token";
 const OFFLINE_ACCESS_TOKEN_TYPE =
   "urn:shopify:params:oauth:token-type:offline-access-token";
 
-import shopify from "./shopify.js";
+import shopify, { PREMIUM_PLAN, PREMIUM_ANNUAL_PLAN } from "./shopify.js";
 import cancelSubscription from "./cancel-subscription.js";
 import GDPRWebhookHandlers from "./gdpr.js";
 import {
@@ -44,8 +44,31 @@ const STATIC_PATH =
     ? `${process.cwd()}/frontend/dist`
     : `${process.cwd()}/frontend/`;
 
+// Plan slugs the frontend sends -> Shopify billing plan names (web/shopify.js).
+// Both grant the same "premium" tier; they differ only in billing interval.
 const PREMIUM_PLAN_SLUG = "premium";
-const PREMIUM_PLAN = "Premium";
+const PREMIUM_ANNUAL_PLAN_SLUG = "premium_annual";
+const PREMIUM_PLANS_BY_SLUG = {
+  [PREMIUM_PLAN_SLUG]: PREMIUM_PLAN,
+  [PREMIUM_ANNUAL_PLAN_SLUG]: PREMIUM_ANNUAL_PLAN,
+};
+const PREMIUM_PLAN_NAMES = Object.values(PREMIUM_PLANS_BY_SLUG);
+
+const getPlanSlugByName = (planName) =>
+  Object.keys(PREMIUM_PLANS_BY_SLUG).find(
+    (slug) => PREMIUM_PLANS_BY_SLUG[slug] === planName
+  ) || null;
+
+// The slug of the premium plan the shop is currently subscribed to, or null.
+const getActivePlanSlug = (billing) => {
+  if (!billing?.hasActivePayment) return null;
+
+  const active = (billing.appSubscriptions || []).find((subscription) =>
+    PREMIUM_PLAN_NAMES.includes(subscription?.name)
+  );
+
+  return getPlanSlugByName(active?.name) || PREMIUM_PLAN_SLUG;
+};
 
 const APP_NAMESPACE = "custom";
 const APP_META_KEY = "mx-pdp-coupon";
@@ -468,7 +491,7 @@ const sendReauthorizationRequired = async (req, res, session, extra = {}) => {
   });
 };
 
-const buildPricingReturnUrl = (req, shop, hostParam) => {
+const buildPricingReturnUrl = (req, shop, hostParam, planSlug) => {
   const appBase = getAppBaseUrl(req).replace(/\/+$/, "");
   const sanitizedHost = shopify.api.utils.sanitizeHost(hostParam || "");
 
@@ -488,7 +511,7 @@ const buildPricingReturnUrl = (req, shop, hostParam) => {
   returnParams.set("shop", shop);
   returnParams.set("host", sanitizedHost);
   returnParams.set("billingReturn", "1");
-  returnParams.set("plan", PREMIUM_PLAN_SLUG);
+  returnParams.set("plan", planSlug);
 
   return `${appBase}/pricing?${returnParams.toString()}`;
 };
@@ -701,18 +724,17 @@ const bridgeBillingGetToPost = (allowedMethod) => async (req, res) => {
   return app._router.handle(req, res, () => undefined);
 };
 
-const normalizePlanCheckResponse = (tier) => ({
-  hasActiveSubscription: tier === "premium",
-  isActiveSubscription: tier === "premium",
-  tier,
-  plan: tier === "premium" ? PREMIUM_PLAN : null,
+// `planSlug` is "premium" (monthly), "premium_annual", or null on the free tier.
+const normalizePlanCheckResponse = (planSlug) => ({
+  hasActiveSubscription: !!planSlug,
+  isActiveSubscription: !!planSlug,
+  tier: planSlug ? "premium" : "free",
+  plan: planSlug ? PREMIUM_PLANS_BY_SLUG[planSlug] : null,
+  planSlug: planSlug || null,
 });
 
-const normalizePlanMutationResponse = ({ tier, confirmationUrl = null }) => ({
-  hasActiveSubscription: tier === "premium",
-  isActiveSubscription: tier === "premium",
-  tier,
-  plan: tier === "premium" ? PREMIUM_PLAN : null,
+const normalizePlanMutationResponse = ({ planSlug, confirmationUrl = null }) => ({
+  ...normalizePlanCheckResponse(planSlug),
   confirmationUrl,
 });
 
@@ -944,13 +966,13 @@ const BillingService = {
     // because BillingService.requestSubscription uses isTest: BILLING_IS_TEST.
     return await shopify.api.billing.check({
       session,
-      plans: [PREMIUM_PLAN],
+      plans: PREMIUM_PLAN_NAMES,
       isTest: true,
       returnObject: true,
     });
   },
 
-  async requestSubscription(session, returnUrl) {
+  async requestSubscription(session, planName, returnUrl) {
     if (!returnUrl) {
       throw new Error(
         "Missing HOST configuration for Shopify billing return URL."
@@ -964,7 +986,7 @@ const BillingService = {
     // stores (used by App Store reviewers) remain detectable in LIVE mode.
     return await shopify.api.billing.request({
       session,
-      plan: PREMIUM_PLAN,
+      plan: planName,
       isTest: BILLING_IS_TEST,
       returnUrl,
     });
@@ -1149,13 +1171,14 @@ app.get("/api/scroll-to-top/hasSubscription", async (req, res) => {
     }
 
     const billing = await BillingService.checkSubscription(session);
-    const tier = billing?.hasActivePayment ? "premium" : "free";
+    const planSlug = getActivePlanSlug(billing);
+    const tier = planSlug ? "premium" : "free";
     const metafieldSync = await syncTierMetafield(session, tier, {
       ensureInstallation: tier === "premium",
     });
 
     res.status(HTTP_STATUS.OK).send({
-      ...normalizePlanCheckResponse(tier),
+      ...normalizePlanCheckResponse(planSlug),
       billingMode: getBillingModeLabel(BILLING_IS_TEST),
       metafieldSync,
     });
@@ -1171,8 +1194,9 @@ app.post(
   "/api/createSubscription",
   ...runBillingEndpoint(async (req, res, session) => {
     const requestedPlan = getRequestedPlan(req);
+    const requestedPlanName = PREMIUM_PLANS_BY_SLUG[requestedPlan];
 
-    if (requestedPlan !== PREMIUM_PLAN_SLUG) {
+    if (!requestedPlanName) {
       return handleError(
         res,
         HTTP_STATUS.BAD_REQUEST,
@@ -1183,20 +1207,26 @@ app.post(
     const billingReturnUrl = buildPricingReturnUrl(
       req,
       session.shop,
-      getHostFromRequest(req)
+      getHostFromRequest(req),
+      requestedPlan
     );
 
     const billingState = await checkBillingState(req, session);
     session = billingState.session;
 
-    if (billingState.billing?.hasActivePayment) {
+    const activePlanSlug = getActivePlanSlug(billingState.billing);
+
+    // Already on the requested plan: nothing to charge. Switching between
+    // monthly and annual falls through to a new subscription request; once the
+    // merchant approves it, Shopify replaces the existing subscription.
+    if (activePlanSlug === requestedPlan) {
       const metafieldSync = await syncTierMetafield(session, "premium", {
         ensureInstallation: true,
       });
 
       return sendPlanResponse(
         res,
-        normalizePlanMutationResponse({ tier: "premium" }),
+        normalizePlanMutationResponse({ planSlug: activePlanSlug }),
         metafieldSync
       );
     }
@@ -1206,7 +1236,11 @@ app.post(
       session,
       async (resolvedSession) => {
         session = resolvedSession;
-        return BillingService.requestSubscription(resolvedSession, billingReturnUrl);
+        return BillingService.requestSubscription(
+          resolvedSession,
+          requestedPlanName,
+          billingReturnUrl
+        );
       }
     );
 
@@ -1222,7 +1256,7 @@ app.post(
     return sendPlanResponse(
       res,
       normalizePlanMutationResponse({
-        tier: "free",
+        planSlug: activePlanSlug,
         confirmationUrl,
       }),
       { ok: true }
@@ -1236,7 +1270,9 @@ app.post(
     const billingState = await checkBillingState(req, session);
     session = billingState.session;
 
-    if (!billingState.billing?.hasActivePayment) {
+    const activePlanSlug = getActivePlanSlug(billingState.billing);
+
+    if (!activePlanSlug) {
       const metafieldSync = await syncTierMetafield(session, "free", {
         deleteInstallation: true,
       });
@@ -1244,7 +1280,7 @@ app.post(
       return sendPlanResponse(
         res,
         {
-          ...normalizePlanMutationResponse({ tier: "free" }),
+          ...normalizePlanMutationResponse({ planSlug: null }),
           status: "No subscription found",
           cancelledPlan: null,
         },
@@ -1264,9 +1300,9 @@ app.post(
     return sendPlanResponse(
       res,
       {
-        ...normalizePlanMutationResponse({ tier: "free" }),
+        ...normalizePlanMutationResponse({ planSlug: null }),
         status,
-        cancelledPlan: PREMIUM_PLAN,
+        cancelledPlan: PREMIUM_PLANS_BY_SLUG[activePlanSlug],
       },
       metafieldSync
     );
@@ -1279,7 +1315,8 @@ app.get(
     const billingState = await checkBillingState(req, session);
     session = billingState.session;
 
-    const tier = billingState.billing?.hasActivePayment ? "premium" : "free";
+    const planSlug = getActivePlanSlug(billingState.billing);
+    const tier = planSlug ? "premium" : "free";
     const metafieldSync = await syncTierMetafield(session, tier, {
       ensureInstallation: tier === "premium",
       deleteInstallation: tier === "free",
@@ -1287,7 +1324,7 @@ app.get(
 
     return sendPlanResponse(
       res,
-      normalizePlanCheckResponse(tier),
+      normalizePlanCheckResponse(planSlug),
       metafieldSync
     );
   })
