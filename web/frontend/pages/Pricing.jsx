@@ -3,16 +3,12 @@ import React, { useEffect, useMemo, useRef, useState } from "react";
 import {
   Page,
   Layout,
-  Card,
   Button,
   Banner,
-  Stack,
-  ButtonGroup,
   Modal,
   TextContainer,
   Icon,
 } from "@shopify/polaris";
-import { couponStripColors, couponStripStyles } from "../brand";
 import { CircleTickMinor } from "@shopify/polaris-icons";
 import {
   useAuthenticatedFetch,
@@ -515,72 +511,31 @@ export default function Pricing() {
   const isOnPremium = selectedPlan === "premium";
   const hasResolvedPlan = selectedPlan === "free" || selectedPlan === "premium";
 
-  const Feature = ({ children }) => (
-    <Stack spacing="tight" alignment="center">
-      {tick}
-      <span style={{ fontSize: 14, color: couponStripColors.text }}>{children}</span>
-    </Stack>
-  );
-
   // Card highlight follows the tier; the premium card is "current" on either
-  // billing cycle.
+  // billing cycle. Layout/typography live in theme.css (Polaris Card ignores
+  // a style prop, so these cards are plain elements).
   const isCardCurrent = (card) =>
     card === "premium" ? isOnPremium : isCurrent(card);
 
-  const cardStyle = (plan) => ({
-    borderRadius: 20,
-    border: isCardCurrent(plan)
-      ? `2px solid ${couponStripColors.borderStrong}`
-      : `1px solid ${couponStripColors.border}`,
-    boxShadow: isCardCurrent(plan)
-      ? `0 18px 45px ${couponStripColors.shadowStrong}`
-      : `0 8px 24px ${couponStripColors.shadow}`,
-    background:
-      plan === "premium"
-        ? `linear-gradient(180deg, #ffffff 0%, ${couponStripColors.primarySoft} 100%)`
-        : `linear-gradient(180deg, #ffffff 0%, ${couponStripColors.accentSoft} 100%)`,
-    transform: isCardCurrent(plan) ? "translateY(-4px)" : "none",
-    transition: "all 0.2s ease",
-  });
+  const cardClassName = (card) =>
+    [
+      "cs-plan-card",
+      card === "premium" && "cs-plan-card--premium",
+      isCardCurrent(card) && "cs-plan-card--current",
+    ]
+      .filter(Boolean)
+      .join(" ");
 
-  const currentBadge = {
-    background: couponStripColors.primary,
-    color: "#fff",
-    padding: "4px 12px",
-    borderRadius: 999,
-    fontSize: 12,
-  };
-
-  const popularBadge = {
-    background: couponStripColors.accent,
-    color: couponStripColors.text,
-    padding: "4px 12px",
-    borderRadius: 999,
-    fontSize: 12,
-  };
-
-  const freeButtonStyle = couponStripStyles.secondaryButton;
-  const premiumButtonStyle = couponStripStyles.primaryButton;
-  const mutedTextStyle = { color: couponStripColors.mutedText };
-  const pageIntroStyle = {
-    color: couponStripColors.mutedText,
-    marginBottom: 18,
-  };
-  const priceStyle = { fontSize: 34, color: couponStripColors.text };
-  const sectionSpacingStyle = { marginTop: 14 };
-  const actionSpacingStyle = { marginTop: 18 };
-  const cardHeadingStyle = { color: couponStripColors.text };
-  const periodStyle = { fontSize: 16, fontWeight: 400, color: couponStripColors.mutedText };
-  const savingsBadge = {
-    display: "inline-block",
-    marginTop: 6,
-    background: couponStripColors.primarySoft,
-    color: couponStripColors.primaryDark,
-    padding: "2px 10px",
-    borderRadius: 999,
-    fontSize: 12,
-    fontWeight: 600,
-  };
+  const FeatureList = ({ items }) => (
+    <ul className="cs-features">
+      {items.map((item) => (
+        <li key={item} className="cs-feature">
+          {tick}
+          <span>{item}</span>
+        </li>
+      ))}
+    </ul>
+  );
 
   const premiumSlug = selectedPremiumPlan.slug;
   const premiumButtonLabel = isCurrent(premiumSlug)
@@ -600,27 +555,33 @@ export default function Pricing() {
   const pageContent = (
     <Layout>
       <Layout.Section oneHalf>
-        <Card sectioned style={cardStyle("free")}>
-          <Stack alignment="center" distribution="equalSpacing">
-            <h2 style={cardHeadingStyle}>Free</h2>
-            {isCurrent("free") && <span style={currentBadge}>Current</span>}
-          </Stack>
+        <div className={cardClassName("free")}>
+          <div className="cs-plan-header">
+            <h2 className="cs-plan-name">Free</h2>
+            {isCurrent("free") && (
+              <span className="cs-badge cs-badge--current">Current</span>
+            )}
+          </div>
 
-          <h1 style={priceStyle}>$0</h1>
-          <p style={mutedTextStyle}>Everything you need to run a few offers</p>
+          <div className="cs-price">
+            <span className="cs-price-amount">$0</span>
+            <span className="cs-price-period">/ forever</span>
+          </div>
+          <p className="cs-plan-desc">Everything you need to run a few offers.</p>
 
-          <Stack vertical spacing="loose" style={sectionSpacingStyle}>
-            <Feature>Display coupon offers on product pages</Feature>
-            <Feature>Show up to 3 active offers</Feature>
-            <Feature>Adjust colors and layout</Feature>
-            <Feature>Keep slider arrow navigation</Feature>
-            <Feature>Support mobile-friendly browsing</Feature>
-          </Stack>
+          <FeatureList
+            items={[
+              "Display coupon offers on product pages",
+              "Show up to 3 active offers",
+              "Adjust colors and layout",
+              "Keep slider arrow navigation",
+              "Support mobile-friendly browsing",
+            ]}
+          />
 
-          <div style={actionSpacingStyle}>
+          <div className="cs-plan-action">
             <Button
               fullWidth
-              style={freeButtonStyle}
               disabled={!hasResolvedPlan || isCurrent("free") || loading.page || !!loading.action}
               loading={loading.action === "free"}
               onClick={() => openConfirm("free")}
@@ -628,65 +589,64 @@ export default function Pricing() {
               {isCurrent("free") ? "Active plan" : "Choose Free"}
             </Button>
           </div>
-        </Card>
+        </div>
       </Layout.Section>
 
       <Layout.Section oneHalf>
-        <Card sectioned style={cardStyle("premium")}>
-          <Stack alignment="center" distribution="equalSpacing">
-            <h2 style={cardHeadingStyle}>Premium</h2>
-            {!isOnPremium && (
-              <span style={popularBadge}>Popular choice</span>
+        <div className={cardClassName("premium")}>
+          <div className="cs-plan-header">
+            <h2 className="cs-plan-name">Premium</h2>
+            {isOnPremium ? (
+              <span className="cs-badge cs-badge--current">Current</span>
+            ) : (
+              <span className="cs-badge cs-badge--popular">Popular choice</span>
             )}
-            {isOnPremium && <span style={currentBadge}>Current</span>}
-          </Stack>
-
-          <div style={{ marginTop: 12 }}>
-            <ButtonGroup segmented>
-              <Button
-                pressed={billingCycle === "monthly"}
-                onClick={() => setBillingCycle("monthly")}
-              >
-                Monthly
-              </Button>
-              <Button
-                pressed={billingCycle === "annual"}
-                onClick={() => setBillingCycle("annual")}
-              >
-                Yearly
-              </Button>
-            </ButtonGroup>
           </div>
 
-          <h1 style={priceStyle}>
-            ${selectedPremiumPlan.price}
-            <span style={periodStyle}> / {selectedPremiumPlan.period}</span>
-          </h1>
-          {billingCycle === "annual" ? (
-            <span style={savingsBadge}>
-              Save ${ANNUAL_SAVINGS} a year (2 months free)
-            </span>
-          ) : (
-            <span style={savingsBadge}>
-              Pay yearly and save ${ANNUAL_SAVINGS}
-            </span>
-          )}
-          <p style={{ ...mutedTextStyle, marginTop: 8 }}>
-            More room for stores running multiple offers
+          <div className="cs-cycle-toggle" role="group" aria-label="Billing cycle">
+            <button
+              type="button"
+              aria-pressed={billingCycle === "monthly"}
+              onClick={() => setBillingCycle("monthly")}
+            >
+              Monthly
+            </button>
+            <button
+              type="button"
+              aria-pressed={billingCycle === "annual"}
+              onClick={() => setBillingCycle("annual")}
+            >
+              Yearly
+            </button>
+          </div>
+
+          <div className="cs-price">
+            <span className="cs-price-amount">${selectedPremiumPlan.price}</span>
+            <span className="cs-price-period">/ {selectedPremiumPlan.period}</span>
+          </div>
+          <span className="cs-savings">
+            {billingCycle === "annual"
+              ? `Save $${ANNUAL_SAVINGS} a year · 2 months free`
+              : `Pay yearly and save $${ANNUAL_SAVINGS}`}
+          </span>
+          <p className="cs-plan-desc">
+            More room for stores running multiple offers.
           </p>
 
-          <Stack vertical spacing="loose" style={sectionSpacingStyle}>
-            <Feature>Display coupon offers on product pages</Feature>
-            <Feature>Show up to 6 active offers</Feature>
-            <Feature>Adjust colors and layout</Feature>
-            <Feature>Keep slider arrow navigation</Feature>
-            <Feature>Support mobile-friendly browsing</Feature>
-          </Stack>
+          <FeatureList
+            items={[
+              "Display coupon offers on product pages",
+              "Show up to 6 active offers",
+              "Adjust colors and layout",
+              "Keep slider arrow navigation",
+              "Support mobile-friendly browsing",
+            ]}
+          />
 
-          <div style={actionSpacingStyle}>
+          <div className="cs-plan-action">
             <Button
               fullWidth
-              style={premiumButtonStyle}
+              primary
               disabled={!hasResolvedPlan || isCurrent(premiumSlug) || loading.page || !!loading.action}
               loading={loading.action === premiumSlug}
               onClick={() => openConfirm(premiumSlug)}
@@ -694,7 +654,7 @@ export default function Pricing() {
               {premiumButtonLabel}
             </Button>
           </div>
-        </Card>
+        </div>
       </Layout.Section>
     </Layout>
   );
@@ -741,7 +701,7 @@ export default function Pricing() {
 
       <Page
         title={planPageTitle}
-        subtitle={<div style={pageIntroStyle}>{planIntro}</div>}
+        subtitle={planIntro}
       >
         {!!banner.msg && (
           <Banner

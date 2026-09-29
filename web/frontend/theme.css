@@ -1,0 +1,197 @@
+/*
+ * Coupon Strip app-wide typography + pricing card styles.
+ *
+ * Inter is the typeface the Shopify admin uses, so the embedded app reads as
+ * part of the admin. Overriding --p-font-family-sans restyles every Polaris
+ * component; this file must be imported AFTER Polaris's styles.css.
+ *
+ * Polaris Card/Button/Stack ignore a `style` prop, so anything that needs
+ * custom layout is styled here with classes on plain elements instead.
+ */
+
+:root {
+  --p-font-family-sans: "Inter", -apple-system, BlinkMacSystemFont,
+    "San Francisco", "Segoe UI", Roboto, "Helvetica Neue", sans-serif;
+
+  --cs-primary: #0f766e;
+  --cs-primary-dark: #134e4a;
+  --cs-primary-soft: #ccfbf1;
+  --cs-accent: #14b8a6;
+  --cs-accent-soft: #f0fdfa;
+  --cs-text: #0f172a;
+  --cs-muted: #475569;
+  --cs-border: #e2e8f0;
+  --cs-border-strong: #0d9488;
+}
+
+html,
+body {
+  font-family: var(--p-font-family-sans);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* ------------------------------ Pricing ------------------------------ */
+
+.cs-plan-card {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  padding: 24px;
+  border-radius: 16px;
+  border: 1px solid var(--cs-border);
+  background: #ffffff;
+  box-shadow: 0 1px 3px rgba(15, 23, 42, 0.06);
+  color: var(--cs-text);
+  transition: box-shadow 0.2s ease, border-color 0.2s ease;
+}
+
+.cs-plan-card--premium {
+  background: linear-gradient(180deg, #ffffff 0%, var(--cs-accent-soft) 100%);
+}
+
+.cs-plan-card--current {
+  border: 2px solid var(--cs-border-strong);
+  box-shadow: 0 12px 32px rgba(13, 148, 136, 0.16);
+}
+
+.cs-plan-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  min-height: 28px;
+}
+
+.cs-plan-name {
+  margin: 0;
+  font-size: 18px;
+  line-height: 28px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+}
+
+.cs-badge {
+  padding: 3px 10px;
+  border-radius: 999px;
+  font-size: 12px;
+  line-height: 18px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.cs-badge--current {
+  background: var(--cs-primary);
+  color: #ffffff;
+}
+
+.cs-badge--popular {
+  background: var(--cs-primary-soft);
+  color: var(--cs-primary-dark);
+}
+
+.cs-cycle-toggle {
+  display: inline-flex;
+  align-self: flex-start;
+  margin-top: 16px;
+  padding: 3px;
+  border-radius: 10px;
+  background: #f1f5f9;
+  border: 1px solid var(--cs-border);
+}
+
+.cs-cycle-toggle button {
+  appearance: none;
+  border: 0;
+  background: transparent;
+  padding: 6px 16px;
+  border-radius: 7px;
+  font-family: inherit;
+  font-size: 13px;
+  line-height: 20px;
+  font-weight: 500;
+  color: var(--cs-muted);
+  cursor: pointer;
+  transition: background 0.15s ease, color 0.15s ease;
+}
+
+.cs-cycle-toggle button[aria-pressed="true"] {
+  background: #ffffff;
+  color: var(--cs-text);
+  font-weight: 600;
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.12);
+}
+
+.cs-cycle-toggle button:focus-visible {
+  outline: 2px solid var(--cs-border-strong);
+  outline-offset: 1px;
+}
+
+.cs-price {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  margin: 16px 0 0;
+}
+
+.cs-price-amount {
+  font-size: 40px;
+  line-height: 48px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+}
+
+.cs-price-period {
+  font-size: 15px;
+  line-height: 22px;
+  font-weight: 500;
+  color: var(--cs-muted);
+}
+
+.cs-savings {
+  align-self: flex-start;
+  margin-top: 8px;
+  padding: 2px 10px;
+  border-radius: 999px;
+  background: var(--cs-primary-soft);
+  color: var(--cs-primary-dark);
+  font-size: 12px;
+  line-height: 20px;
+  font-weight: 600;
+}
+
+.cs-plan-desc {
+  margin: 12px 0 0;
+  font-size: 14px;
+  line-height: 20px;
+  color: var(--cs-muted);
+}
+
+.cs-features {
+  list-style: none;
+  margin: 20px 0 0;
+  padding: 20px 0 0;
+  border-top: 1px solid var(--cs-border);
+  display: grid;
+  gap: 12px;
+}
+
+.cs-feature {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 14px;
+  line-height: 20px;
+  color: var(--cs-text);
+}
+
+.cs-feature .Polaris-Icon {
+  margin: 0;
+  flex: 0 0 auto;
+}
+
+/* Pushes the button to the card bottom so both cards' buttons line up. */
+.cs-plan-action {
+  margin-top: auto;
+  padding-top: 24px;
+}

@@ -3,6 +3,8 @@ import { AppProvider } from "@shopify/polaris";
 import { useNavigate } from "react-router-dom";
 import translations from "@shopify/polaris/locales/en.json";
 import "@shopify/polaris/build/esm/styles.css";
+// After Polaris so its font-family override wins.
+import "../../theme.css";
 import { couponStripStyles } from "../../brand";
 
 const IS_EXTERNAL_LINK_REGEX = /^(?:[a-z][a-z\d+.-]*:|\/\/)/;
