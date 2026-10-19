@@ -23,7 +23,11 @@ const TROUBLESHOOTING = [
   },
   {
     q: "I can't add a fourth coupon",
-    a: "That's the free plan limit. Delete one you're no longer running, or move to Premium on the Plans page for six.",
+    a: "That's the Basic plan limit. Delete one you're no longer running, or move to Pro on the Plan page for six.",
+  },
+  {
+    q: "How do I change or cancel my plan?",
+    a: "Billing is handled by Shopify. Use Switch on the Plan page to open Shopify's plan page, where you can move between Basic and Pro or switch between monthly and yearly billing. Uninstalling the app cancels your subscription.",
   },
 ];
 

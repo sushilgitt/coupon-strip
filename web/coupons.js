@@ -32,7 +32,7 @@ export class CouponValidationError extends Error {
 const createClient = (session) => new shopify.api.clients.Graphql({ session });
 
 // client.query() resolves to { body: { data, errors } }. Surface both
-// top-level GraphQL errors and mutation userErrors (matches cancel-subscription.js).
+// top-level GraphQL errors and mutation userErrors.
 const assertNoErrors = (body, mutationName) => {
   const topLevelErrors = body?.errors || [];
   const userErrors = body?.data?.[mutationName]?.userErrors || [];

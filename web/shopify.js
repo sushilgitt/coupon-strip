@@ -1,4 +1,4 @@
-import { ApiVersion, BillingInterval } from "@shopify/shopify-api";
+import { ApiVersion } from "@shopify/shopify-api";
 import { shopifyApp } from "@shopify/shopify-app-express";
 import { MongoDBSessionStorage } from "@shopify/shopify-app-session-storage-mongodb";
 import { restResources } from "@shopify/shopify-api/rest/admin/2025-07";
@@ -7,37 +7,13 @@ import {
   mongoDbUrl,
   mongoSessionCollection,
 } from "./mongo-config.js";
-// Plan names are what Shopify stores on the subscription, so they must stay
-// stable: merchants already subscribed to "Premium" keep their original price
-// and are still detected as premium.
-export const PREMIUM_PLAN = "Premium";
-export const PREMIUM_ANNUAL_PLAN = "Premium Annual";
-const PREMIUM_PLAN_PRICE = 30;
-const PREMIUM_ANNUAL_PLAN_PRICE = 300;
-// NOTE: The Shopify App Billing API (charging merchants for this app) requires
-// NO dedicated access scope — an app can always manage its own subscriptions.
-// It does require the app to use *public* distribution. The previously
-// configured "read_own_subscription"/"write_own_subscription" scopes are not
-// valid Shopify scopes (Shopify rejects them on `app deploy`), which is why the
-// granted token only had `write_products` and billing.check returned 403.
+// Billing uses Shopify App Pricing (see app-pricing.js): plans are configured in
+// the Partner Dashboard, so there is deliberately no `billing` config here.
 const shopifyHost = process.env.HOST?.replace(/https?:\/\//, "");
 const shopifyScopes = (process.env.SCOPES || "")
   .split(",")
   .map((scope) => scope.trim())
   .filter(Boolean);
-
-const billingConfig = {
-  [PREMIUM_PLAN]: {
-    amount: PREMIUM_PLAN_PRICE,
-    currencyCode: "USD",
-    interval: BillingInterval.Every30Days,
-  },
-  [PREMIUM_ANNUAL_PLAN]: {
-    amount: PREMIUM_ANNUAL_PLAN_PRICE,
-    currencyCode: "USD",
-    interval: BillingInterval.Annual,
-  },
-};
 
 if (!shopifyHost) {
   throw new Error("Missing HOST configuration for Shopify app setup.");
@@ -55,7 +31,6 @@ const shopify = shopifyApp({
     apiSecretKey: process.env.SHOPIFY_API_SECRET,
     hostName: shopifyHost,
     scopes: shopifyScopes,
-    billing: billingConfig,
   },
   auth: {
     path: "/api/auth",

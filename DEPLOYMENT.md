@@ -7,7 +7,7 @@ Set these runtime variables for the backend service:
 ```env
 SHOPIFY_API_KEY=your_shopify_api_key
 SHOPIFY_API_SECRET=your_shopify_api_secret
-SCOPES=write_products,read_products
+SCOPES=read_products,write_discounts,write_products
 HOST=https://your-app-domain.com
 PORT=3000
 BACKEND_PORT=3000
@@ -17,8 +17,26 @@ MONGODB_SESSION_COLLECTION=shopify_sessions
 VITE_SHOPIFY_API_KEY=your_shopify_api_key
 VITE_SHOPIFY_EXTENSION_UID=your_shopify_extension_uid
 VITE_SHOPIFY_BLOCK_HANDLE=pdp-coupon
-SHOPIFY_BILLING_TEST_MODE=true
+# Shopify App Pricing (plans are configured in the Partner Dashboard)
+SHOPIFY_APP_ID=numeric_app_id_from_partner_dashboard_url
+SHOPIFY_APP_HANDLE=app_handle_from_admin_url
+PARTNER_ORG_ID=partner_organization_id
+PARTNER_API_ACCESS_TOKEN=partner_api_client_token_with_manage_apps
+# PARTNER_API_VERSION=2026-07
 ```
+
+## 2. Shopify App Pricing
+
+Billing uses Shopify App Pricing, not the Billing API. There is no free plan.
+
+- In the Partner Dashboard, create two plans with the handles `basic` (3 coupons)
+  and `pro` (6 coupons). Coupon limits live in `PLAN_COUPON_LIMITS` in
+  `web/app-pricing.js`.
+- Set each plan's welcome link to `/`. Shopify appends `plan_handle`, which
+  makes the app refresh its cached plan.
+- Create a Partner API client with the **Manage apps** permission and use its
+  token as `PARTNER_API_ACCESS_TOKEN`.
+- The server will not start unless all four App Pricing variables are set.
 
 Use a lowercase MongoDB database name such as `couponstrip`. MongoDB can fail when a host already has the same database name in a different case.
 

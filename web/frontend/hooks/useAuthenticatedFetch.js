@@ -1,5 +1,4 @@
 const RETURN_TO_STORAGE_KEY = "couponStrip:returnTo";
-const PENDING_PLAN_STORAGE_KEY = "couponStrip:pendingPlan";
 const REAUTH_GUARD_STORAGE_KEY = "couponStrip:reauthGuard";
 const REAUTH_GUARD_WINDOW_MS = 60000;
 
@@ -51,7 +50,7 @@ async function sessionTokenFetch(uri, options = {}) {
 
 export function useAuthenticatedFetch() {
   return async (uri, options = {}) => {
-    const { reauthPlan = "", ...fetchOptions } = options || {};
+    const fetchOptions = options || {};
     let response = await sessionTokenFetch(uri, fetchOptions);
 
     if (response.ok) {
@@ -71,11 +70,11 @@ export function useAuthenticatedFetch() {
       response = retryResponse;
     }
 
-    if (await checkHeadersForReauthorization(response, reauthPlan)) {
+    if (await checkHeadersForReauthorization(response)) {
       throw new ReauthorizationInProgressError();
     }
 
-    if (await checkJsonForReauthorization(response, reauthPlan)) {
+    if (await checkJsonForReauthorization(response)) {
       throw new ReauthorizationInProgressError();
     }
 
@@ -90,7 +89,7 @@ function shouldRetryBeforeReauth(response) {
   );
 }
 
-async function checkHeadersForReauthorization(response, pendingPlan) {
+async function checkHeadersForReauthorization(response) {
   if (
     response.headers.get("X-Shopify-API-Request-Failure-Reauthorize") !== "1"
   ) {
@@ -104,12 +103,11 @@ async function checkHeadersForReauthorization(response, pendingPlan) {
   return beginReauthorization({
     authUrl: authUrlHeader,
     shop: getCurrentShop(),
-    pendingPlan,
     reason: "session",
   });
 }
 
-async function checkJsonForReauthorization(response, pendingPlan) {
+async function checkJsonForReauthorization(response) {
   if (response.status !== 401) return false;
 
   const contentType = response.headers.get("content-type") || "";
@@ -122,15 +120,14 @@ async function checkJsonForReauthorization(response, pendingPlan) {
     return beginReauthorization({
       authUrl: "/api/auth",
       shop: data.shop || getCurrentShop(),
-      pendingPlan,
-      reason: data.requiresBillingScopes ? "billing-scopes" : "session",
+      reason: data.requiresScopes ? "scopes" : "session",
     });
   } catch {
     return false;
   }
 }
 
-function beginReauthorization({ authUrl, shop, pendingPlan, reason }) {
+function beginReauthorization({ authUrl, shop, reason }) {
   const currentRoute = getCurrentRoute();
   const currentHost = getCurrentHost();
   const resolvedAuthUrl = new URL(authUrl, `https://${window.location.host}`);
@@ -145,12 +142,6 @@ function beginReauthorization({ authUrl, shop, pendingPlan, reason }) {
   if (getRecentReauthAttempt()) return true;
 
   window.sessionStorage.setItem(RETURN_TO_STORAGE_KEY, currentRoute);
-
-  if (pendingPlan) {
-    window.sessionStorage.setItem(PENDING_PLAN_STORAGE_KEY, pendingPlan);
-  } else {
-    window.sessionStorage.removeItem(PENDING_PLAN_STORAGE_KEY);
-  }
 
   rememberReauthAttempt({ reason, route: currentRoute });
 

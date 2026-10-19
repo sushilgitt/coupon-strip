@@ -7,6 +7,7 @@ import {
   AppBridgeProvider,
   QueryProvider,
   PolarisProvider,
+  PlanProvider,
 } from "./components";
 
 const RETURN_TO_STORAGE_KEY = "couponStrip:returnTo";
@@ -119,7 +120,7 @@ function EmbeddedNavigationMenu() {
     () => [
       { label: "Overview", path: "/", home: true },
       { label: "Coupons", path: "/coupons" },
-      { label: "Plans", path: "/pricing" },
+      { label: "Plan", path: "/pricing" },
       { label: "Help", path: "/support" },
     ],
     []
@@ -153,7 +154,9 @@ export default function App() {
             <ErrorBoundary>
               <ResumeStoredRoute />
               <EmbeddedNavigationMenu />
-              <Routes pages={pages} />
+              <PlanProvider>
+                <Routes pages={pages} />
+              </PlanProvider>
             </ErrorBoundary>
           </QueryProvider>
         </PolarisProvider>

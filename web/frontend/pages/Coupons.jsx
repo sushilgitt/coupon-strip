@@ -19,6 +19,7 @@ import { couponStripColors, couponStripStyles } from "../brand";
 import {
   useAuthenticatedFetch,
   isReauthorizationInProgressError,
+  redirectTopLevel,
 } from "../hooks";
 
 const TYPE_OPTIONS = [
@@ -83,7 +84,7 @@ export default function Coupons() {
   const host = getCurrentHost();
 
   const [coupons, setCoupons] = useState([]);
-  const [tier, setTier] = useState(/** @type {"free"|"premium"|null} */ (null));
+  const [plan, setPlan] = useState(/** @type {"basic"|"pro"|null} */ (null));
   const [limit, setLimit] = useState(3);
   const [currency, setCurrency] = useState("USD");
 
@@ -116,12 +117,19 @@ export default function Coupons() {
 
   const applyState = (data) => {
     if (Array.isArray(data.coupons)) setCoupons(data.coupons);
-    if (data.tier) setTier(data.tier);
+    if (data.plan !== undefined) setPlan(data.plan);
     if (typeof data.limit === "number") setLimit(data.limit);
     if (data.currency) setCurrency(data.currency);
   };
 
   const handleResponse = (response, data, fallback) => {
+    // The plan lapsed since the app loaded: send the merchant to Shopify's
+    // plan selection page.
+    if (response.status === 402 && data?.needsPlan && data.planSelectionUrl) {
+      redirectTopLevel(String(data.planSelectionUrl));
+      return false;
+    }
+
     if (response.status === 403 && data?.upsell) {
       setBanner({
         msg:
@@ -315,14 +323,13 @@ export default function Coupons() {
             <Banner status="info">
               <p>
                 You're using {coupons.length} of {limit} coupons on the{" "}
-                {tier === "premium" ? "Premium" : "Free"} plan.
-                {tier !== "premium" &&
-                  " Upgrade to Premium to add up to 6 coupons."}
+                {plan === "pro" ? "Pro" : "Basic"} plan.
+                {plan !== "pro" && " Upgrade to Pro to add up to 6 coupons."}
               </p>
-              {tier !== "premium" && (
+              {plan !== "pro" && (
                 <div style={{ marginTop: 12 }}>
                   <Button onClick={goToPricing} style={couponStripStyles.primaryButton}>
-                    See Premium
+                    See Pro
                   </Button>
                 </div>
               )}
@@ -418,7 +425,9 @@ export default function Coupons() {
         <Layout.Section oneHalf>
           <Card
             sectioned
-            title={`Your coupons (${coupons.length}/${limit})`}
+            title={`Your coupons (${coupons.length}/${limit}${
+              plan ? ` · ${plan === "pro" ? "Pro" : "Basic"}` : ""
+            })`}
             style={couponStripStyles.accentCard}
           >
             {loading ? (

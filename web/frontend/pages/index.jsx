@@ -1,6 +1,7 @@
 import { useNavigate, useLocation } from "react-router-dom";
 import { Button, Card, Layout, Page, Stack, TextContainer } from "@shopify/polaris";
 import { couponStripColors, couponStripStyles } from "../brand";
+import { usePlan } from "../components";
 
 const decodeHost = (host) => {
   if (!host) return "";
@@ -63,10 +64,21 @@ const SETUP_STEPS = [
 ];
 
 const mutedStyle = { color: couponStripColors.mutedText };
+const planBadgeStyle = {
+  marginLeft: 8,
+  padding: "2px 8px",
+  borderRadius: 999,
+  background: couponStripColors.primarySoft,
+  color: couponStripColors.primaryDark,
+  fontSize: 12,
+  fontWeight: 600,
+};
 
 export default function HomePage() {
   const navigate = useNavigate();
   const location = useLocation();
+  const { plan, limit } = usePlan();
+  const isPro = plan === "pro";
 
   const go = (path) => navigate(withEmbeddedParams(path, location.search));
 
@@ -126,17 +138,20 @@ export default function HomePage() {
             <Stack alignment="center" distribution="equalSpacing" wrap={false}>
               <Stack.Item fill>
                 <p style={{ color: couponStripColors.text, fontWeight: 600, marginBottom: 4 }}>
-                  Need more than three offers running at once?
+                  You're on the {isPro ? "Pro" : "Basic"} plan
+                  <span style={planBadgeStyle}>{limit} live codes</span>
                 </p>
                 <p style={mutedStyle}>
-                  The free plan keeps three codes live. Premium raises that to six.
+                  {isPro
+                    ? "Pro keeps up to six codes live in the strip at once."
+                    : "Basic keeps three codes live. Pro raises that to six."}
                 </p>
               </Stack.Item>
               <Button
                 style={couponStripStyles.secondaryButton}
                 onClick={() => go("/pricing")}
               >
-                See plans
+                {isPro ? "Manage plan" : "Upgrade to Pro"}
               </Button>
             </Stack>
           </Card>

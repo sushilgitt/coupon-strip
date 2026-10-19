@@ -1,10 +1,9 @@
 // @ts-check
 import { join } from "path";
 import { readFileSync } from "fs";
-import crypto from "crypto";
 import express from "express";
 import serveStatic from "serve-static";
-import { BillingError, Session } from "@shopify/shopify-api";
+import { Session } from "@shopify/shopify-api";
 
 // Token-exchange constants (RFC 8693). We perform the exchange manually instead
 // of shopify.api.auth.tokenExchange() because the installed library version
@@ -16,9 +15,14 @@ const ID_TOKEN_SUBJECT_TYPE = "urn:ietf:params:oauth:token-type:id_token";
 const OFFLINE_ACCESS_TOKEN_TYPE =
   "urn:shopify:params:oauth:token-type:offline-access-token";
 
-import shopify, { PREMIUM_PLAN, PREMIUM_ANNUAL_PLAN } from "./shopify.js";
-import cancelSubscription from "./cancel-subscription.js";
+import shopify from "./shopify.js";
 import GDPRWebhookHandlers from "./gdpr.js";
+import {
+  PlanLookupError,
+  getCouponLimit,
+  getPlanSelectionUrl,
+  getShopPlan,
+} from "./app-pricing.js";
 import {
   CouponValidationError,
   normalizeCouponInput,
@@ -44,67 +48,14 @@ const STATIC_PATH =
     ? `${process.cwd()}/frontend/dist`
     : `${process.cwd()}/frontend/`;
 
-// Plan slugs the frontend sends -> Shopify billing plan names (web/shopify.js).
-// Both grant the same "premium" tier; they differ only in billing interval.
-const PREMIUM_PLAN_SLUG = "premium";
-const PREMIUM_ANNUAL_PLAN_SLUG = "premium_annual";
-const PREMIUM_PLANS_BY_SLUG = {
-  [PREMIUM_PLAN_SLUG]: PREMIUM_PLAN,
-  [PREMIUM_ANNUAL_PLAN_SLUG]: PREMIUM_ANNUAL_PLAN,
-};
-const PREMIUM_PLAN_NAMES = Object.values(PREMIUM_PLANS_BY_SLUG);
-
-const getPlanSlugByName = (planName) =>
-  Object.keys(PREMIUM_PLANS_BY_SLUG).find(
-    (slug) => PREMIUM_PLANS_BY_SLUG[slug] === planName
-  ) || null;
-
-// The slug of the premium plan the shop is currently subscribed to, or null.
-const getActivePlanSlug = (billing) => {
-  if (!billing?.hasActivePayment) return null;
-
-  const active = (billing.appSubscriptions || []).find((subscription) =>
-    PREMIUM_PLAN_NAMES.includes(subscription?.name)
-  );
-
-  return getPlanSlugByName(active?.name) || PREMIUM_PLAN_SLUG;
-};
-
+// The storefront block reads the shop's plan handle ("basic" | "pro" | "none")
+// from this shop metafield to decide how many coupons to render.
 const APP_NAMESPACE = "custom";
 const APP_META_KEY = "mx-pdp-coupon";
 
 const APP_INSTALL_METAFIELD = "mx-pdp-coupon-code-premium";
 
-const BILLING_TEST_MODE_ENV = "SHOPIFY_BILLING_TEST_MODE";
 const AUTH_RETURN_TO_COOKIE = "coupon_strip_auth_return_to";
-
-const parseBooleanEnv = (name) => {
-  const rawValue = process.env[name];
-  if (rawValue == null || rawValue.trim() === "") return null;
-
-  const normalizedValue = rawValue.trim().toLowerCase();
-  if (["true", "1", "yes"].includes(normalizedValue)) return true;
-  if (["false", "0", "no"].includes(normalizedValue)) return false;
-
-  throw new Error(
-    `Invalid ${name} value "${rawValue}". Use true or false.`
-  );
-};
-
-const resolvedBillingTestMode = (() => {
-  const envOverride = parseBooleanEnv(BILLING_TEST_MODE_ENV);
-
-  if (envOverride !== null) {
-    return { isTest: envOverride, source: `${BILLING_TEST_MODE_ENV} override` };
-  }
-
-  return {
-    isTest: process.env.NODE_ENV !== "production",
-    source: "NODE_ENV default",
-  };
-})();
-
-const BILLING_IS_TEST = resolvedBillingTestMode.isTest;
 
 const APP_HOST = process.env.HOST?.trim();
 
@@ -112,7 +63,9 @@ const HTTP_STATUS = {
   OK: 200,
   BAD_REQUEST: 400,
   UNAUTHORIZED: 401,
+  PAYMENT_REQUIRED: 402,
   INTERNAL_SERVER_ERROR: 500,
+  SERVICE_UNAVAILABLE: 503,
 };
 
 /* -------------------------------------------------------------------------- */
@@ -121,10 +74,6 @@ const HTTP_STATUS = {
 
 const app = express();
 app.set("trust proxy", 1);
-
-console.log(
-  `[billing] Mode=${BILLING_IS_TEST ? "TEST" : "LIVE"} (${resolvedBillingTestMode.source})`
-);
 
 /* -------------------------------------------------------------------------- */
 /*                           SHOPIFY WEBHOOKS                                 */
@@ -491,34 +440,8 @@ const sendReauthorizationRequired = async (req, res, session, extra = {}) => {
   });
 };
 
-const buildPricingReturnUrl = (req, shop, hostParam, planSlug) => {
-  const appBase = getAppBaseUrl(req).replace(/\/+$/, "");
-  const sanitizedHost = shopify.api.utils.sanitizeHost(hostParam || "");
-
-  if (!appBase) {
-    throw new Error("Missing HOST configuration for Shopify billing return URL.");
-  }
-
-  if (!shop) {
-    throw new Error("Missing shop for Shopify billing return URL.");
-  }
-
-  if (!sanitizedHost) {
-    throw new Error("Missing host parameter for Shopify billing return URL.");
-  }
-
-  const returnParams = new URLSearchParams();
-  returnParams.set("shop", shop);
-  returnParams.set("host", sanitizedHost);
-  returnParams.set("billingReturn", "1");
-  returnParams.set("plan", planSlug);
-
-  return `${appBase}/pricing?${returnParams.toString()}`;
-};
-
-const getBillingModeLabel = (isTest) => (isTest ? "TEST" : "LIVE");
-
-const syncTierMetafield = async (session, tier, options = {}) => {
+// `plan` is "basic", "pro", or null (no active subscription).
+const syncPlanMetafield = async (session, plan, options = {}) => {
   const { ensureInstallation = false, deleteInstallation = false } = options;
 
   try {
@@ -530,12 +453,12 @@ const syncTierMetafield = async (session, tier, options = {}) => {
       await MetafieldService.deleteAppMetafield(session);
     }
 
-    await MetafieldService.setShopMetafield(session, tier);
+    await MetafieldService.setShopMetafield(session, plan);
     return { ok: true };
   } catch (error) {
-    console.error("[metafield] Subscription tier sync failed", {
+    console.error("[metafield] Plan sync failed", {
       shop: session?.shop,
-      tier,
+      plan,
       error: error instanceof Error ? error.message : String(error),
     });
 
@@ -546,24 +469,25 @@ const syncTierMetafield = async (session, tier, options = {}) => {
   }
 };
 
-const checkBillingState = async (req, session) => {
+// The shop's App Pricing plan ("basic" | "pro" | null). The shop GID comes from
+// the Admin API (the Partner API identifies shops by GID); callers that already
+// hold it can pass it in to skip that request.
+const resolveShopPlan = async (req, session, { shopGid, refresh = false } = {}) => {
   let resolvedSession = session;
-  const billing = await withSessionRefresh(req, session, async (nextSession) => {
-    resolvedSession = nextSession;
-    return BillingService.checkSubscription(nextSession);
-  });
+  const gid =
+    shopGid ||
+    (await withSessionRefresh(req, session, async (nextSession) => {
+      resolvedSession = nextSession;
+      return MetafieldService.getShopGid(nextSession);
+    }));
 
-  return {
-    session: resolvedSession,
-    billing,
-  };
+  const plan = await getShopPlan(resolvedSession.shop, gid, { refresh });
+  return { session: resolvedSession, plan };
 };
 
-const withBillingErrorHandling = async (req, res, session, err, contextLabel) => {
-  // Shared context so no billing/session failure is ever silent again. A
-  // "Forbidden" from the Billing API usually means the app is not using public
-  // distribution (the Billing API needs no scope but does need a public app),
-  // or the Admin token is under-scoped; logging the granted scopes disambiguates.
+const handleApiError = async (req, res, session, err, contextLabel) => {
+  // Shared context so no API/session failure is ever silent. Logging the
+  // granted scopes disambiguates an under-scoped Admin token.
   const logContext = {
     shop: session?.shop,
     statusCode: getErrorStatusCode(err),
@@ -572,32 +496,22 @@ const withBillingErrorHandling = async (req, res, session, err, contextLabel) =>
     grantedScopes: session?.scope,
   };
 
-  if (err instanceof BillingError) {
-    const details = formatBillingErrorDetails(err.errorData);
-
-    console.error(`${contextLabel} failed (BillingError)`, {
-      ...logContext,
-      errorData: err.errorData,
-    });
-
-    if (isBillingScopeError(err)) {
-      const reauthShop = await resolveReauthShop(req, session);
-      return sendBillingReauthorizationRequired(res, reauthShop, details);
-    }
-
-    return res.status(HTTP_STATUS.INTERNAL_SERVER_ERROR).send({
-      error: details[0] || err.message,
-      details,
+  // Partner API outage or throttling: fail closed with a retryable error rather
+  // than treating a paying merchant as having no plan.
+  if (err instanceof PlanLookupError) {
+    console.error(`${contextLabel} failed (plan lookup)`, logContext);
+    return res.status(HTTP_STATUS.SERVICE_UNAVAILABLE).json({
+      error: "We couldn't check your plan right now. Please try again in a moment.",
     });
   }
 
   if (isForbiddenScopeError(err)) {
     console.error(
-      `${contextLabel} forbidden — access token likely missing billing scopes`,
+      `${contextLabel} forbidden — access token likely missing required scopes`,
       logContext
     );
     const reauthShop = await resolveReauthShop(req, session);
-    return sendBillingReauthorizationRequired(res, reauthShop);
+    return sendScopeReauthorizationRequired(res, reauthShop);
   }
 
   if (isUnauthorizedError(err)) {
@@ -612,131 +526,6 @@ const withBillingErrorHandling = async (req, res, session, err, contextLabel) =>
   const error = err instanceof Error ? err : new Error(String(err));
   return handleError(res, HTTP_STATUS.INTERNAL_SERVER_ERROR, error.message);
 };
-
-const getEmbeddedParam = (source, key) => {
-  const value = source?.[key];
-  return typeof value === "string" ? value.trim() : "";
-};
-
-const buildEmbeddedParams = (source = {}) => {
-  const params = new URLSearchParams();
-  const shop = getEmbeddedParam(source, "shop");
-  const host = getEmbeddedParam(source, "host");
-
-  if (shop) {
-    params.set("shop", shop);
-  }
-
-  if (host) {
-    params.set("host", host);
-  }
-
-  return params;
-};
-
-const sendPlanResponse = (res, payload, metafieldSync) =>
-  res.send({
-    ...payload,
-    billingMode: getBillingModeLabel(BILLING_IS_TEST),
-    metafieldSync,
-  });
-
-const getRequestedPlan = (req) => {
-  const source = req.method === "POST" ? req.body : req.query;
-  return String(source?.plan || "").toLowerCase();
-};
-
-const getHostFromRequest = (req) => {
-  const queryHost = getEmbeddedParam(req.query, "host");
-  if (queryHost) {
-    return queryHost;
-  }
-
-  return getEmbeddedParam(req.body, "host");
-};
-
-const requireAuthenticatedBillingSession = async (req, res, next) => {
-  try {
-    if (!getBearerTokenFromRequest(req)) {
-      return sendReauthorizationRequired(req, res, null, {
-        error: "Authentication context is missing. Reopen the app from Shopify admin and try again.",
-      });
-    }
-
-    return shopify.validateAuthenticatedSession()(req, res, next);
-  } catch (error) {
-    return next(error);
-  }
-};
-
-const runBillingEndpoint = (handler, { requireValidatedSession = false } = {}) => {
-  const middleware = [];
-
-  if (requireValidatedSession) {
-    middleware.push(requireAuthenticatedBillingSession);
-  }
-
-  middleware.push(async (req, res) => {
-    let session;
-
-    try {
-      session = await getSession(req, res);
-
-      if (!session) {
-        console.warn("[session] No usable session for billing request", {
-          shop: await getShopFromRequest(req),
-          hadBearer: !!getBearerTokenFromRequest(req),
-        });
-        return sendReauthorizationRequired(req, res, session, {
-          error: "Authentication context is missing. Reopen the app from Shopify admin and try again.",
-        });
-      }
-
-      return await handler(req, res, session);
-    } catch (err) {
-      return withBillingErrorHandling(req, res, session, err, "Billing request");
-    }
-  });
-
-  return middleware;
-};
-
-const respondUnsupportedBillingMethod = (res, allowedMethod) =>
-  res.status(405).json({
-    error: `Use ${allowedMethod} for this billing action.`,
-  });
-
-const bridgeBillingGetToPost = (allowedMethod) => async (req, res) => {
-  if (allowedMethod !== "POST") {
-    return respondUnsupportedBillingMethod(res, allowedMethod);
-  }
-
-  const embeddedParams = buildEmbeddedParams(req.query);
-  const plan = getRequestedPlan(req);
-  if (plan) {
-    embeddedParams.set("plan", plan);
-  }
-
-  req.method = "POST";
-  req.url = req.path;
-  req.body = Object.fromEntries(embeddedParams.entries());
-
-  return app._router.handle(req, res, () => undefined);
-};
-
-// `planSlug` is "premium" (monthly), "premium_annual", or null on the free tier.
-const normalizePlanCheckResponse = (planSlug) => ({
-  hasActiveSubscription: !!planSlug,
-  isActiveSubscription: !!planSlug,
-  tier: planSlug ? "premium" : "free",
-  plan: planSlug ? PREMIUM_PLANS_BY_SLUG[planSlug] : null,
-  planSlug: planSlug || null,
-});
-
-const normalizePlanMutationResponse = ({ planSlug, confirmationUrl = null }) => ({
-  ...normalizePlanCheckResponse(planSlug),
-  confirmationUrl,
-});
 
 const getSession = async (req, res) => {
   if (res?.locals?.shopify?.session) {
@@ -863,22 +652,20 @@ const getErrorStatusCode = (err) => {
 
 const isUnauthorizedError = (err) => {
   const statusCode = getErrorStatusCode(err);
-  if (statusCode === 401) return true;
-  if (statusCode === 403 && !isBillingScopeError(err)) return true;
+  if (statusCode === 401 || statusCode === 403) return true;
 
   if (typeof err?.message !== "string") return false;
 
   const message = err.message.toLowerCase();
-  if (message.includes("401") || message.includes("unauthorized")) {
-    return true;
-  }
-
-  return message.includes("403") || message.includes("forbidden")
-    ? !isBillingScopeError(err)
-    : false;
+  return (
+    message.includes("401") ||
+    message.includes("unauthorized") ||
+    message.includes("403") ||
+    message.includes("forbidden")
+  );
 };
 
-const formatBillingErrorDetails = (errorData = []) =>
+const formatErrorDetails = (errorData = []) =>
   errorData
     .map((detail) => {
       if (typeof detail === "string") return detail;
@@ -887,32 +674,14 @@ const formatBillingErrorDetails = (errorData = []) =>
     })
     .filter(Boolean);
 
-const isBillingScopeError = (err) => {
-  if (!(err instanceof BillingError)) return false;
-  if (getErrorStatusCode(err) !== 403) return false;
-
-  const messageParts = [err.message, ...formatBillingErrorDetails(err.errorData)]
-    .filter(Boolean)
-    .join(" ")
-    .toLowerCase();
-
-  return (
-    messageParts.includes("forbidden") ||
-    messageParts.includes("scope") ||
-    messageParts.includes("subscription") ||
-    messageParts.includes("permission")
-  );
-};
-
-// A 403 from billing.check / the Admin API is usually NOT a BillingError (it's
-// a GraphqlQueryError / HttpResponseError). It means the app cannot use the
-// Billing API yet (app not on public distribution) or the Admin token is
-// under-scoped. Surface it as an actionable reauth/approval prompt instead of
-// looping silently through plain session reauthorization.
+// A 403 from the Admin API (a GraphqlQueryError / HttpResponseError) usually
+// means the Admin token is under-scoped. Surface it as an actionable
+// reauth/approval prompt instead of looping silently through plain session
+// reauthorization.
 const isForbiddenScopeError = (err) => {
   const messageParts = [
     err?.message,
-    ...(Array.isArray(err?.errorData) ? formatBillingErrorDetails(err.errorData) : []),
+    ...(Array.isArray(err?.errorData) ? formatErrorDetails(err.errorData) : []),
   ]
     .filter(Boolean)
     .join(" ")
@@ -942,71 +711,15 @@ const isForbiddenScopeError = (err) => {
   );
 };
 
-const sendBillingReauthorizationRequired = (res, shop, details = []) =>
+const sendScopeReauthorizationRequired = (res, shop, details = []) =>
   res.status(HTTP_STATUS.UNAUTHORIZED).json({
     needsReauth: true,
-    requiresBillingScopes: true,
+    requiresScopes: true,
     shop,
     error:
       "This app needs fresh authorization with the required permissions. Approve access when prompted, then try again.",
     details,
   });
-
-/* -------------------------------------------------------------------------- */
-/*                               BILLING SERVICE                              */
-/* -------------------------------------------------------------------------- */
-/* -------------------------------------------------------------------------- */
-
-const BillingService = {
-  async checkSubscription(session) {
-    // Detect an active subscription whether Shopify recorded it as a TEST or a
-    // LIVE charge. Shopify FORCES test charges on development stores (which App
-    // Store reviewers use), so checking with the live-only flag would never see
-    // the reviewer's subscription. Real merchants are still billed for real
-    // because BillingService.requestSubscription uses isTest: BILLING_IS_TEST.
-    return await shopify.api.billing.check({
-      session,
-      plans: PREMIUM_PLAN_NAMES,
-      isTest: true,
-      returnObject: true,
-    });
-  },
-
-  async requestSubscription(session, planName, returnUrl) {
-    if (!returnUrl) {
-      throw new Error(
-        "Missing HOST configuration for Shopify billing return URL."
-      );
-    }
-
-    // Charge mode is env-driven via SHOPIFY_BILLING_TEST_MODE -> BILLING_IS_TEST:
-    // false => LIVE (merchants charged real money), true => TEST (test charges).
-    // NOTE: detection (checkSubscription) intentionally stays isTest:true and is
-    // NOT tied to this flag, so Shopify's forced-test charges on development
-    // stores (used by App Store reviewers) remain detectable in LIVE mode.
-    return await shopify.api.billing.request({
-      session,
-      plan: planName,
-      isTest: BILLING_IS_TEST,
-      returnUrl,
-    });
-  },
-
-  async cancel(session) {
-    return await cancelSubscription(session);
-  },
-};
-
-/* -------------------------------------------------------------------------- */
-/*                           SUBSCRIPTION SERVICE                             */
-/* -------------------------------------------------------------------------- */
-
-const SubscriptionService = {
-  async getPlanTier(session) {
-    const billing = await BillingService.checkSubscription(session);
-    return billing?.hasActivePayment ? "premium" : "free";
-  },
-};
 
 /* -------------------------------------------------------------------------- */
 /*                            METAFIELD SERVICE                               */
@@ -1032,12 +745,12 @@ const MetafieldService = {
     return shopId;
   },
 
-  async setShopMetafield(session, tier) {
+  async setShopMetafield(session, plan) {
     const client = createGraphQLClient(session);
 
     const ownerId = await this.getShopGid(session);
 
-    const value = tier === "premium" ? "premium" : "free";
+    const value = plan || "none";
 
     const result = await client.request(CREATE_APP_DATA_METAFIELD, {
       variables: {
@@ -1113,224 +826,6 @@ const MetafieldService = {
 };
 
 /* -------------------------------------------------------------------------- */
-/*                        PUBLIC SUBSCRIPTION CHECK                           */
-/* -------------------------------------------------------------------------- */
-
-// Verify that a request was signed by Shopify's app-proxy. Shopify appends
-// `signature=<hex>` to the proxied query string, where the signature is
-// HMAC-SHA256 of the remaining query params sorted alphabetically and joined
-// as `key=value` (no separator), keyed by the app's API secret.
-// https://shopify.dev/docs/apps/build/online-store/display-dynamic-data#calculate-a-digital-signature
-const verifyAppProxySignature = (req) => {
-  const secret = process.env.SHOPIFY_API_SECRET;
-  if (!secret) return false;
-
-  const { signature, ...rest } = req.query;
-  if (typeof signature !== "string" || !signature) return false;
-
-  const message = Object.keys(rest)
-    .sort()
-    .map((key) => {
-      const value = rest[key];
-      const joined = Array.isArray(value) ? value.join(",") : String(value);
-      return `${key}=${joined}`;
-    })
-    .join("");
-
-  const digest = crypto
-    .createHmac("sha256", secret)
-    .update(message)
-    .digest("hex");
-
-  const provided = Buffer.from(signature, "utf8");
-  const expected = Buffer.from(digest, "utf8");
-  if (provided.length !== expected.length) return false;
-  return crypto.timingSafeEqual(provided, expected);
-};
-
-app.get("/api/scroll-to-top/hasSubscription", async (req, res) => {
-  try {
-    if (!verifyAppProxySignature(req)) {
-      return handleError(
-        res,
-        HTTP_STATUS.UNAUTHORIZED,
-        "Invalid app proxy signature"
-      );
-    }
-
-    const { shop } = req.query;
-
-    if (!shop) {
-      return handleError(res, HTTP_STATUS.BAD_REQUEST, "Missing shop");
-    }
-
-    const session = await loadSessionForShop(shop);
-
-    if (!session) {
-      return handleError(res, HTTP_STATUS.UNAUTHORIZED, "Session not found");
-    }
-
-    const billing = await BillingService.checkSubscription(session);
-    const planSlug = getActivePlanSlug(billing);
-    const tier = planSlug ? "premium" : "free";
-    const metafieldSync = await syncTierMetafield(session, tier, {
-      ensureInstallation: tier === "premium",
-    });
-
-    res.status(HTTP_STATUS.OK).send({
-      ...normalizePlanCheckResponse(planSlug),
-      billingMode: getBillingModeLabel(BILLING_IS_TEST),
-      metafieldSync,
-    });
-  } catch (err) {
-    const error = err instanceof Error ? err : new Error(String(err));
-    handleError(res, HTTP_STATUS.INTERNAL_SERVER_ERROR, error.message);
-  }
-});
-
-app.get("/api/createSubscription", bridgeBillingGetToPost("POST"));
-app.get("/api/cancelSubscription", bridgeBillingGetToPost("POST"));
-app.post(
-  "/api/createSubscription",
-  ...runBillingEndpoint(async (req, res, session) => {
-    const requestedPlan = getRequestedPlan(req);
-    const requestedPlanName = PREMIUM_PLANS_BY_SLUG[requestedPlan];
-
-    if (!requestedPlanName) {
-      return handleError(
-        res,
-        HTTP_STATUS.BAD_REQUEST,
-        `Unsupported plan "${requestedPlan || "unknown"}"`
-      );
-    }
-
-    const billingReturnUrl = buildPricingReturnUrl(
-      req,
-      session.shop,
-      getHostFromRequest(req),
-      requestedPlan
-    );
-
-    const billingState = await checkBillingState(req, session);
-    session = billingState.session;
-
-    const activePlanSlug = getActivePlanSlug(billingState.billing);
-
-    // Already on the requested plan: nothing to charge. Switching between
-    // monthly and annual falls through to a new subscription request; once the
-    // merchant approves it, Shopify replaces the existing subscription.
-    if (activePlanSlug === requestedPlan) {
-      const metafieldSync = await syncTierMetafield(session, "premium", {
-        ensureInstallation: true,
-      });
-
-      return sendPlanResponse(
-        res,
-        normalizePlanMutationResponse({ planSlug: activePlanSlug }),
-        metafieldSync
-      );
-    }
-
-    const billingResponse = await withSessionRefresh(
-      req,
-      session,
-      async (resolvedSession) => {
-        session = resolvedSession;
-        return BillingService.requestSubscription(
-          resolvedSession,
-          requestedPlanName,
-          billingReturnUrl
-        );
-      }
-    );
-
-    const confirmationUrl =
-      typeof billingResponse === "string"
-        ? billingResponse
-        : billingResponse?.confirmationUrl;
-
-    if (!confirmationUrl) {
-      throw new Error("Shopify did not return a billing confirmation URL.");
-    }
-
-    return sendPlanResponse(
-      res,
-      normalizePlanMutationResponse({
-        planSlug: activePlanSlug,
-        confirmationUrl,
-      }),
-      { ok: true }
-    );
-  })
-);
-
-app.post(
-  "/api/cancelSubscription",
-  ...runBillingEndpoint(async (req, res, session) => {
-    const billingState = await checkBillingState(req, session);
-    session = billingState.session;
-
-    const activePlanSlug = getActivePlanSlug(billingState.billing);
-
-    if (!activePlanSlug) {
-      const metafieldSync = await syncTierMetafield(session, "free", {
-        deleteInstallation: true,
-      });
-
-      return sendPlanResponse(
-        res,
-        {
-          ...normalizePlanMutationResponse({ planSlug: null }),
-          status: "No subscription found",
-          cancelledPlan: null,
-        },
-        metafieldSync
-      );
-    }
-
-    const status = await withSessionRefresh(req, session, async (resolvedSession) => {
-      session = resolvedSession;
-      return BillingService.cancel(resolvedSession);
-    });
-
-    const metafieldSync = await syncTierMetafield(session, "free", {
-      deleteInstallation: true,
-    });
-
-    return sendPlanResponse(
-      res,
-      {
-        ...normalizePlanMutationResponse({ planSlug: null }),
-        status,
-        cancelledPlan: PREMIUM_PLANS_BY_SLUG[activePlanSlug],
-      },
-      metafieldSync
-    );
-  })
-);
-
-app.get(
-  "/api/hasActiveSubscription",
-  ...runBillingEndpoint(async (req, res, session) => {
-    const billingState = await checkBillingState(req, session);
-    session = billingState.session;
-
-    const planSlug = getActivePlanSlug(billingState.billing);
-    const tier = planSlug ? "premium" : "free";
-    const metafieldSync = await syncTierMetafield(session, tier, {
-      ensureInstallation: tier === "premium",
-      deleteInstallation: tier === "free",
-    });
-
-    return sendPlanResponse(
-      res,
-      normalizePlanCheckResponse(planSlug),
-      metafieldSync
-    );
-  })
-);
-
-/* -------------------------------------------------------------------------- */
 /*                                SHOP INFO                                   */
 /* -------------------------------------------------------------------------- */
 
@@ -1343,25 +838,39 @@ app.get("/api/getshop", shopify.validateAuthenticatedSession(), async (req, res)
 /*                              COUPONS (DISCOUNTS)                           */
 /* -------------------------------------------------------------------------- */
 
-const TIER_COUPON_LIMIT = { free: 3, premium: 6 };
-
-const getTierLimit = (tier) => TIER_COUPON_LIMIT[tier] ?? TIER_COUPON_LIMIT.free;
-
 const generateCouponId = () =>
   `c_${Date.now().toString(36)}${Math.random().toString(36).slice(2, 8)}`;
 
-const buildCouponsPayload = async (session, coupons, currency) => {
-  const tier = await SubscriptionService.getPlanTier(session);
-  return { coupons, tier, limit: getTierLimit(tier), currency };
-};
+const buildCouponsPayload = (coupons, currency, plan) => ({
+  coupons,
+  plan,
+  limit: getCouponLimit(plan),
+  currency,
+});
+
+class PlanRequiredError extends Error {
+  constructor() {
+    super("Choose a plan to create or edit coupons.");
+    this.name = "PlanRequiredError";
+  }
+}
 
 // CouponValidationError -> 400 (bad input / Shopify userError like duplicate
-// code). A plan-limit hit -> 403 with upsell flag. Everything else (incl. a 403
-// from a token missing write_discounts) flows through the shared billing/auth
-// handler, which converts unauthorized/scope errors into a reauth prompt.
+// code). No plan -> 402 with the plan selection URL. A plan-limit hit -> 403
+// with upsell flag. Everything else (incl. a 403 from a token missing
+// write_discounts) flows through the shared API error handler, which converts
+// unauthorized/scope errors into a reauth prompt.
 const handleCouponError = (req, res, session, err, contextLabel) => {
   if (err instanceof CouponValidationError) {
     return handleError(res, HTTP_STATUS.BAD_REQUEST, err.message);
+  }
+
+  if (err instanceof PlanRequiredError) {
+    return res.status(HTTP_STATUS.PAYMENT_REQUIRED).json({
+      error: err.message,
+      needsPlan: true,
+      planSelectionUrl: getPlanSelectionUrl(session?.shop),
+    });
   }
 
   if (err?.upsell) {
@@ -1372,14 +881,13 @@ const handleCouponError = (req, res, session, err, contextLabel) => {
     return res.status(403).json({ error: err.message, upsell: true });
   }
 
-  return withBillingErrorHandling(req, res, session, err, contextLabel);
+  return handleApiError(req, res, session, err, contextLabel);
 };
 
 // Resolve the session WITHOUT shopify.validateAuthenticatedSession(): that
 // middleware requires session.isActive(api.config.scopes) — an exact scope
 // match — so adding write_discounts to the config 403-loops every stored token
-// that predates the new scope. The billing endpoints avoid it for the same
-// reason. We still authenticate: require a present, valid App Bridge bearer
+// that predates the new scope. We still authenticate: require a present, valid App Bridge bearer
 // token (so an unauthenticated ?shop= request can't fall through to a stored
 // session), then let getSession do the manual expiring-token exchange.
 const resolveCouponSession = async (req, res) => {
@@ -1413,6 +921,41 @@ const resolveCouponSession = async (req, res) => {
   return session;
 };
 
+/* -------------------------------------------------------------------------- */
+/*                                   PLAN                                     */
+/* -------------------------------------------------------------------------- */
+
+// The frontend gates the whole app on this. `?refresh=1` skips the plan cache
+// (used when the merchant lands back from Shopify's plan selection page). The
+// plan is mirrored into the shop metafield the storefront block reads.
+app.get("/api/plan", async (req, res) => {
+  let session = await resolveCouponSession(req, res);
+  if (!session) return undefined;
+
+  try {
+    const resolved = await resolveShopPlan(req, session, {
+      refresh: req.query.refresh === "1",
+    });
+    session = resolved.session;
+    const { plan } = resolved;
+
+    const metafieldSync = await syncPlanMetafield(session, plan, {
+      ensureInstallation: !!plan,
+      deleteInstallation: !plan,
+    });
+
+    return res.json({
+      plan,
+      hasActiveSubscription: !!plan,
+      limit: getCouponLimit(plan),
+      planSelectionUrl: getPlanSelectionUrl(session.shop),
+      metafieldSync,
+    });
+  } catch (err) {
+    return handleApiError(req, res, session, err, "Plan check");
+  }
+});
+
 app.get(
   "/api/coupons",
   async (req, res) => {
@@ -1423,7 +966,8 @@ app.get(
       const payload = await withSessionRefresh(req, session, async (s) => {
         session = s;
         const state = await getCouponsState(s);
-        return buildCouponsPayload(s, state.coupons, state.currency);
+        const plan = await getShopPlan(s.shop, state.shopGid);
+        return buildCouponsPayload(state.coupons, state.currency, plan);
       });
       return res.json(payload);
     } catch (err) {
@@ -1456,8 +1000,10 @@ app.post(
           );
         }
 
-        const tier = await SubscriptionService.getPlanTier(s);
-        const limit = getTierLimit(tier);
+        const plan = await getShopPlan(s.shop, state.shopGid);
+        if (!plan) throw new PlanRequiredError();
+
+        const limit = getCouponLimit(plan);
         if (state.coupons.length >= limit) {
           const limitError = new Error(
             `You've reached your plan limit of ${limit} coupons. Upgrade to add more.`
@@ -1479,15 +1025,10 @@ app.post(
         };
         const coupons = [...state.coupons, entry];
         await writeCoupons(s, state.shopGid, coupons);
-        return { coupons, currency: state.currency };
+        return buildCouponsPayload(coupons, state.currency, plan);
       });
 
-      const responseBody = await buildCouponsPayload(
-        session,
-        payload.coupons,
-        payload.currency
-      );
-      return res.json(responseBody);
+      return res.json(payload);
     } catch (err) {
       return handleCouponError(req, res, session, err, "Coupon create");
     }
@@ -1529,6 +1070,9 @@ app.put(
           );
         }
 
+        const plan = await getShopPlan(s.shop, state.shopGid);
+        if (!plan) throw new PlanRequiredError();
+
         const existing = state.coupons[index];
         const { discountGid, code } = await updateDiscount(s, existing, coupon);
         const updated = {
@@ -1545,15 +1089,10 @@ app.put(
           i === index ? updated : entry
         );
         await writeCoupons(s, state.shopGid, coupons);
-        return { coupons, currency: state.currency };
+        return buildCouponsPayload(coupons, state.currency, plan);
       });
 
-      const responseBody = await buildCouponsPayload(
-        session,
-        payload.coupons,
-        payload.currency
-      );
-      return res.json(responseBody);
+      return res.json(payload);
     } catch (err) {
       return handleCouponError(req, res, session, err, "Coupon update");
     }
@@ -1574,8 +1113,11 @@ app.delete(
           (entry) => entry.id === req.params.id
         );
 
+        // Deleting needs no plan, so a merchant without one can still clean up.
+        const plan = await getShopPlan(s.shop, state.shopGid);
+
         if (!existing) {
-          return { coupons: state.coupons, currency: state.currency };
+          return buildCouponsPayload(state.coupons, state.currency, plan);
         }
 
         await deleteDiscount(s, existing.discountGid);
@@ -1583,15 +1125,10 @@ app.delete(
           (entry) => entry.id !== req.params.id
         );
         await writeCoupons(s, state.shopGid, coupons);
-        return { coupons, currency: state.currency };
+        return buildCouponsPayload(coupons, state.currency, plan);
       });
 
-      const responseBody = await buildCouponsPayload(
-        session,
-        payload.coupons,
-        payload.currency
-      );
-      return res.json(responseBody);
+      return res.json(payload);
     } catch (err) {
       return handleCouponError(req, res, session, err, "Coupon delete");
     }
